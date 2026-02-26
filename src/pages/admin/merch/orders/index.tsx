@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import AuthenticatedNav from "../../../../components/AuthenticatedNav";
-import AdminPageLoader from "../../../../components/AdminPageLoader";
 import Footer from "../../../../components/Footer";
 import OrderGroup from "./components/OrderGroup";
 import StatusHeader from "./components/StatusHeader";
@@ -112,10 +111,9 @@ const Index = () => {
 
   return (
     <>
-      <AdminPageLoader isLoading={loading}>
-        <Layout>
-          <div className="relative w-full max-w-[90rem] p-6 text-white">
-            <AuthenticatedNav />
+      <Layout>
+        <div className="relative w-full max-w-[90rem] p-6 text-white">
+          <AuthenticatedNav />
 
             <div className="mt-8">
               {/* Page Header */}
@@ -147,8 +145,16 @@ const Index = () => {
 
               {/* Loading State */}
               {loading && (
-                <div className="flex justify-center items-center py-24">
-                  <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
+                <div className="space-y-6">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="bg-[#1E1E3F]/40 border border-white/5 rounded-2xl p-6 h-40 animate-pulse flex flex-col justify-between">
+                      <div className="flex gap-4">
+                        <div className="h-4 w-32 bg-white/5 rounded"></div>
+                        <div className="h-4 w-48 bg-white/5 rounded"></div>
+                      </div>
+                      <div className="h-16 w-full bg-white/5 rounded"></div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -204,7 +210,6 @@ const Index = () => {
             </div>
           </div>
         </Layout>
-      </AdminPageLoader>{" "}
       <Footer />
     </>
   );

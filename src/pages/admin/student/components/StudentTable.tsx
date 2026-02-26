@@ -170,13 +170,18 @@ const StudentTable = ({
           </thead>
           <tbody className="divide-y divide-white/5">
             {isLoading ? (
-              <tr>
-                <td colSpan={8} className="py-20">
-                  <div className="flex items-center justify-center">
-                    <div className="w-10 h-10 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
-                  </div>
-                </td>
-              </tr>
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b border-white/5 bg-white/[0.01]">
+                  <td className="px-6 py-5"><div className="h-4 w-4 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-4 w-20 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-4 w-24 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-4 w-24 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-4 w-24 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-4 w-32 bg-white/10 rounded animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-6 w-16 bg-white/10 rounded-full animate-pulse"></div></td>
+                  <td className="px-6 py-5"><div className="h-8 w-24 bg-white/10 rounded-lg animate-pulse mx-auto"></div></td>
+                </tr>
+              ))
             ) : currentStudents.length > 0 ? (
               currentStudents.map((student, index) => (
                 <tr
