@@ -290,23 +290,27 @@ const AddVariantModal: React.FC<AddVariantModalProps> = ({
             <ClothingVariantCard
               variant={clothingVariant}
               variantIndex={0}
-              onColorChange={handleClothingColorChange}
-              onPriceChange={handleClothingPriceChange}
-              onImageUpload={handleClothingImageUpload}
-              onSizeCheckChange={handleClothingSizeCheckChange}
-              onStockQuantityChange={handleClothingStockQuantityChange}
-              onPriceChangeForSize={handleClothingPriceChangeForSize}
-              onDelete={() => {}}
+              actions={{
+                updateColor: handleClothingColorChange,
+                updatePrice: handleClothingPriceChange,
+                uploadImage: handleClothingImageUpload,
+                toggleSize: handleClothingSizeCheckChange,
+                updateSizeStock: handleClothingStockQuantityChange,
+                updateSizePrice: handleClothingPriceChangeForSize,
+                remove: () => {},
+              }}
             />
           ) : (
             <NonClothingVariantCard
               variant={nonClothingVariant}
               variantIndex={0}
-              onDesignChange={handleNonClothingDesignChange}
-              onPriceChange={handleNonClothingPriceChange}
-              onImageUpload={handleNonClothingImageUpload}
-              onStockChange={handleNonClothingStockChange}
-              onDelete={() => {}}
+              actions={{
+                updateDesign: handleNonClothingDesignChange,
+                updatePrice: handleNonClothingPriceChange,
+                uploadImage: handleNonClothingImageUpload,
+                updateStock: handleNonClothingStockChange,
+                remove: () => {},
+              }}
             />
           )}
         </div>

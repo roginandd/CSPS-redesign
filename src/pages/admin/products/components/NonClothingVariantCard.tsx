@@ -1,28 +1,11 @@
 import React, { type ChangeEvent } from "react";
-import { FaTrash, FaCloudUploadAlt } from "react-icons/fa";
-import type { NonClothingVariant } from "../../../../hooks/useMerchForm";
-import type { ValidationErrors } from "../util/validation";
-
-interface NonClothingVariantCardProps {
-  variant: NonClothingVariant;
-  variantIndex: number;
-  errors?: ValidationErrors;
-  onDesignChange: (value: string) => void;
-  onPriceChange: (value: string) => void;
-  onImageUpload: (imageIndex: number, file: File) => void;
-  onStockChange: (value: string) => void;
-  onDelete: () => void;
-}
+import type { NonClothingVariantCardProps } from "./productForm.types";
 
 const NonClothingVariantCard: React.FC<NonClothingVariantCardProps> = ({
   variant,
   variantIndex,
   errors = {},
-  onDesignChange,
-  onPriceChange,
-  onImageUpload,
-  onStockChange,
-  onDelete,
+  actions,
 }) => {
   const handleImageUpload = (
     imageIndex: number,
@@ -30,79 +13,84 @@ const NonClothingVariantCard: React.FC<NonClothingVariantCardProps> = ({
   ) => {
     const file = e.target.files?.[0];
     if (file) {
-      onImageUpload(imageIndex, file);
+      actions.uploadImage(imageIndex, file);
     }
   };
 
+  const inputClass =
+    "w-full rounded-lg border border-white/10 bg-[#140f33] px-3 py-2.5 text-sm text-white placeholder:text-white/35 transition-colors focus:border-purple-500/35 focus:outline-none";
+
   return (
-    <div className="bg-[#242050] rounded-2xl p-6 border border-white/10">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-5">
-        <h3 className="text-2xl font-bold">Variant {variantIndex + 1}</h3>
+    <div className="rounded-xl border border-white/10 bg-[#1a1635] p-5">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-white/45">
+            Design Variant
+          </p>
+          <h3 className="mt-1 text-base font-semibold text-white">
+            Variant {variantIndex + 1}
+          </h3>
+        </div>
         <button
-          onClick={onDelete}
-          className="text-white/40 hover:text-red-400 transition"
+          onClick={actions.remove}
+          className="rounded-lg border border-white/10 bg-[#140f33] px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-200"
           aria-label="Delete variant"
+          type="button"
         >
-          <FaTrash size={20} />
+          Remove
         </button>
       </div>
 
-      {/* Design Input */}
-      <div className="mb-5">
-        <label className="block text-xl font-medium text-white/60 mb-2">
-          Design
-        </label>
-        <input
-          type="text"
-          value={variant.design}
-          onChange={(e) => onDesignChange(e.target.value)}
-          placeholder="e.g., Gold Logo, Holographic"
-          className={`w-full bg-[#1a163d] rounded-lg px-4 py-5 outline-none placeholder-white/30 text-lg text-white border transition ${
-            errors[`variant_${variantIndex}_design`]
-              ? "border-red-500"
-              : "border-transparent focus:border-white/20"
-          }`}
-        />
-        {errors[`variant_${variantIndex}_design`] && (
-          <span className="text-sm text-red-400 mt-2 block">
-            {errors[`variant_${variantIndex}_design`]}
-          </span>
-        )}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/45">
+            Design
+          </label>
+          <input
+            type="text"
+            value={variant.design}
+            onChange={(e) => actions.updateDesign(e.target.value)}
+            placeholder="e.g. Gold Logo, Holographic"
+            className={`${inputClass} ${
+              errors[`variant_${variantIndex}_design`] ? "border-red-500" : ""
+            }`}
+          />
+          {errors[`variant_${variantIndex}_design`] && (
+            <p className="mt-2 text-sm text-red-400">
+              {errors[`variant_${variantIndex}_design`]}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/45">
+            Price
+          </label>
+          <input
+            type="number"
+            value={variant.price === "" ? "" : variant.price}
+            onChange={(e) => actions.updatePrice(e.target.value)}
+            onWheel={(e) => e.currentTarget.blur()}
+            placeholder="0.00"
+            min="0"
+            step="0.01"
+            className={`${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+              errors[`variant_${variantIndex}_price`] ? "border-red-500" : ""
+            }`}
+          />
+          {errors[`variant_${variantIndex}_price`] && (
+            <p className="mt-2 text-sm text-red-400">
+              {errors[`variant_${variantIndex}_price`]}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Price Input */}
-      <div className="mb-5">
-        <label className="block text-xl font-medium text-white/60 mb-2">
-          Price
+      <div className="mt-5">
+        <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/45">
+          Variant Image
         </label>
-        <input
-          type="number"
-          value={variant.price === "" ? "" : variant.price}
-          onChange={(e) => onPriceChange(e.target.value)}
-          onWheel={(e) => e.currentTarget.blur()}
-          placeholder="0.00"
-          min="0"
-          step="0.01"
-          className={`w-full bg-[#1a163d] rounded-lg px-4 py-5 outline-none placeholder-white/30 text-lg text-white border transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-            errors[`variant_${variantIndex}_price`]
-              ? "border-red-500"
-              : "border-transparent focus:border-white/20"
-          }`}
-        />
-        {errors[`variant_${variantIndex}_price`] && (
-          <span className="text-sm text-red-400 mt-2 block">
-            {errors[`variant_${variantIndex}_price`]}
-          </span>
-        )}
-      </div>
-
-      {/* Image Upload */}
-      <div className="flex flex-col items-center mb-5">
-        <span className="text-lg font-medium text-white/60 mb-2">
-          Design Image
-        </span>
-        <label className="relative aspect-[4/3] w-full cursor-pointer bg-[#1a163d] rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center overflow-hidden group hover:bg-[#2f2b60] transition-colors">
+        <label className="relative flex min-h-[220px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-white/10 bg-[#140f33]/90 transition-colors hover:border-purple-500/35 hover:bg-[#211a47]">
           <input
             type="file"
             accept="image/*"
@@ -114,51 +102,48 @@ const NonClothingVariantCard: React.FC<NonClothingVariantCardProps> = ({
             <>
               <img
                 src={variant.imagePreview}
-                alt="Variant"
-                className="w-full h-full object-cover"
+                alt={`Variant ${variantIndex + 1}`}
+                className="absolute inset-0 h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-white text-sm font-semibold">
-                  Change Image
-                </span>
+              <div className="absolute inset-x-4 bottom-4 rounded-lg bg-[#110e31]/80 px-4 py-3 text-center text-sm font-medium text-white">
+                Replace image
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-3">
-              <FaCloudUploadAlt
-                size={32}
-                className="text-white/30 group-hover:text-white/50 transition-colors"
-              />
-              <span className="text-xs text-white/40 uppercase tracking-widest font-bold">
-                Upload
-              </span>
+            <div className="px-6 text-center">
+              <p className="text-sm font-medium text-white">Upload image</p>
+              <p className="mt-2 text-sm text-white/65">
+                Add the main image for this design option.
+              </p>
             </div>
           )}
         </label>
+        {errors[`variant_${variantIndex}_image`] && (
+          <p className="mt-2 text-sm text-red-400">
+            {errors[`variant_${variantIndex}_image`]}
+          </p>
+        )}
       </div>
 
-      {/* Stock Input */}
-      <div>
-        <label className="block text-xl font-medium text-white/60 mb-2">
+      <div className="mt-5">
+        <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-white/45">
           Stock Quantity
         </label>
         <input
           type="number"
           value={variant.stock}
-          onChange={(e) => onStockChange(e.target.value)}
+          onChange={(e) => actions.updateStock(e.target.value)}
           onWheel={(e) => e.currentTarget.blur()}
           placeholder="0"
           min="0"
-          className={`w-full bg-[#1a163d] rounded-lg px-4 py-4 outline-none placeholder-white/30 text-lg text-white border transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-            errors[`variant_${variantIndex}_stock`]
-              ? "border-red-500"
-              : "border-transparent focus:border-white/20"
+          className={`${inputClass} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+            errors[`variant_${variantIndex}_stock`] ? "border-red-500" : ""
           }`}
         />
         {errors[`variant_${variantIndex}_stock`] && (
-          <span className="text-lg text-red-400 mt-2 block">
+          <p className="mt-2 text-sm text-red-400">
             {errors[`variant_${variantIndex}_stock`]}
-          </span>
+          </p>
         )}
       </div>
     </div>

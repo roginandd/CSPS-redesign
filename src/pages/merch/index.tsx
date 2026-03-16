@@ -44,6 +44,9 @@ const Index = () => {
     getMerchById(id).then((data) => prefetchCache.set(id, data));
   };
 
+  const isFiltered = activeTag !== "ALL";
+  const activeTagLabel = activeTag.charAt(0) + activeTag.slice(1).toLowerCase();
+
   return (
     <Layout>
       <AuthenticatedNav />
@@ -131,10 +134,32 @@ const Index = () => {
               </Link>
             ))
           ) : (
-            <div className="col-span-full flex flex-col items-center justify-center py-32 bg-white/4 rounded-3xl border border-white/10 border-dashed">
-              <p className="text-[#D2D2D2] italic">
-                No items found in {activeTag.toLowerCase()}.
-              </p>
+            <div className="col-span-full rounded-[2rem] border border-white/10 bg-[#1d1847]/80 px-6 py-16 sm:px-10">
+              <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                  {isFiltered ? "No Matches" : "Catalog Empty"}
+                </span>
+                <h3 className="mt-5 text-2xl font-semibold tracking-tight text-white">
+                  {isFiltered
+                    ? `No ${activeTagLabel} items available right now`
+                    : "No products available yet"}
+                </h3>
+                <p className="mt-3 max-w-md text-sm leading-7 text-white/62 sm:text-base">
+                  {isFiltered
+                    ? "Try another category or return to all products to keep browsing the catalog."
+                    : "The merchandise catalog is currently empty. Check back later for new CSPS items."}
+                </p>
+
+                {isFiltered && (
+                  <button
+                    onClick={() => setActiveTag("ALL")}
+                    className="mt-6 rounded-xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition-colors hover:border-white/20 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1d1847]"
+                    type="button"
+                  >
+                    Browse all products
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

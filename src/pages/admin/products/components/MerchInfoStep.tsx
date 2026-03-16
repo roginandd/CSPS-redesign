@@ -1,23 +1,9 @@
 import React, { type ChangeEvent } from "react";
-import { FaCloudUploadAlt, FaArrowRight } from "react-icons/fa";
-import { motion, AnimatePresence } from "framer-motion";
-import { MerchType } from "../../../../enums/MerchType";
-import type { ValidationErrors } from "../util/validation";
-import type { MerchFormState } from "../../../../hooks/useMerchForm";
+import { AnimatePresence, motion } from "framer-motion";
 import CustomDropdown from "../../../../components/CustomDropdown";
+import { MerchType } from "../../../../enums/MerchType";
+import type { MerchInfoStepProps } from "./productForm.types";
 
-interface MerchInfoStepProps {
-  formState: MerchFormState;
-  errors?: ValidationErrors;
-  onMerchNameChange: (name: string) => void;
-  onDescriptionChange: (desc: string) => void;
-  onMerchTypeChange: (type: MerchType | "") => void;
-  onBasePriceChange: (price: string) => void;
-  onMerchImageUpload: (index: number, file: File) => void;
-  onNext: () => void;
-}
-
-// --- Reusable Modern Input Block ---
 const InputBlock = ({
   label,
   error,
@@ -35,21 +21,25 @@ const InputBlock = ({
 }) => (
   <div className={`group relative ${className}`}>
     <div
-      className={`relative w-full bg-white/[0.03] hover:bg-white/[0.05] rounded-2xl border-2 transition-all duration-200 ${
+      className={`relative w-full rounded-xl border bg-[#1a1635] transition-colors ${
         error
-          ? "border-red-500/50 bg-red-500/5"
-          : "border-transparent focus-within:border-purple-500/50 focus-within:bg-white/[0.05]"
-      } ${noPadding ? "p-1.5" : "px-5 py-4"}`}
+          ? "border-red-500/60 bg-red-500/5"
+          : "border-white/10 focus-within:border-purple-500/35"
+      } ${noPadding ? "p-1.5" : "px-4 py-3.5"}`}
     >
       <div
-        className={`flex justify-between items-center ${noPadding ? "px-3.5 pt-2.5 mb-1" : "mb-2"}`}
+        className={`flex items-center justify-between gap-3 ${
+          noPadding ? "px-3.5 pt-2.5" : "mb-2"
+        }`}
       >
-        <label className="block text-white/50 text-xs font-semibold uppercase tracking-wider group-focus-within:text-purple-300 transition-colors">
+        <label className="block text-xs font-medium uppercase tracking-wide text-white/50 transition-colors group-focus-within:text-purple-200">
           {label}
         </label>
         {rightElement}
       </div>
-      <div className="relative flex items-center">{children}</div>
+      <div className={`relative flex items-center ${noPadding ? "pt-1" : ""}`}>
+        {children}
+      </div>
     </div>
     <AnimatePresence>
       {error && (
@@ -57,7 +47,7 @@ const InputBlock = ({
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
-          className="absolute -bottom-6 left-2 text-red-400 text-xs font-medium"
+          className="absolute -bottom-6 left-2 text-xs font-medium text-red-400"
         >
           {error}
         </motion.p>
@@ -69,12 +59,7 @@ const InputBlock = ({
 const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
   formState,
   errors = {},
-  onMerchNameChange,
-  onDescriptionChange,
-  onMerchTypeChange,
-  onBasePriceChange,
-  onMerchImageUpload,
-  onNext,
+  actions,
 }) => {
   const handleImageUpload = (
     index: number,
@@ -82,7 +67,7 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
   ) => {
     const file = e.target.files?.[0];
     if (file) {
-      onMerchImageUpload(index, file);
+      actions.uploadMerchImage(index, file);
     }
   };
 
@@ -90,19 +75,22 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
     { label: "Select a category...", value: "" },
     ...Object.entries(MerchType).map(([key, value]) => ({
       label: key.charAt(0) + key.slice(1).toLowerCase(),
-      value: value,
+      value,
     })),
   ];
 
+  const isClothing = formState.merchType === MerchType.CLOTHING;
+  const inputClass =
+    "w-full bg-transparent text-sm text-white placeholder:text-white/35 focus:outline-none sm:text-base";
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
-      {/* --- Left Column: Image Upload --- */}
-      <div className="lg:col-span-5 flex flex-col">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-8">
+      <div className="flex flex-col lg:col-span-5">
         <label
-          className={`relative flex-1 min-h-[320px] lg:min-h-[400px] w-full rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all duration-300 overflow-hidden group ${
+          className={`relative flex min-h-[280px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed transition-colors ${
             errors.merchImage
               ? "border-red-500/50 bg-red-500/5"
-              : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04] hover:border-purple-500/30"
+              : "border-white/10 bg-[#1a1635]/80 hover:border-purple-500/35 hover:bg-[#241d49]/90"
           }`}
         >
           <input
@@ -116,39 +104,26 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
             <>
               <img
                 src={formState.merchImagePreview}
-                alt="Merch Preview"
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                alt="Product preview"
+                className="absolute inset-0 h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <span className="bg-white/10 backdrop-blur-xl px-6 py-3 rounded-2xl text-white font-semibold border border-white/20 shadow-xl">
-                  Change Photo
-                </span>
+              <div className="absolute inset-x-4 bottom-4 rounded-lg bg-[#110e31]/80 px-4 py-3 text-center text-sm font-medium text-white">
+                Replace image
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center gap-5 p-8 text-center">
-              <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center text-white/40 group-hover:scale-110 group-hover:text-purple-400 transition-all duration-300 border border-white/5">
-                <FaCloudUploadAlt size={40} />
-              </div>
-              <div>
-                <span className="block text-lg font-bold text-white mb-2">
-                  Upload Product Image
-                </span>
-                <span className="text-sm text-white/40">
-                  Drag & drop or click to browse
-                </span>
-                <div className="flex items-center justify-center gap-2 mt-3">
-                  <span className="px-3 py-1 bg-white/5 rounded-full text-xs text-white/50">
-                    PNG
-                  </span>
-                  <span className="px-3 py-1 bg-white/5 rounded-full text-xs text-white/50">
-                    JPG
-                  </span>
-                  <span className="px-3 py-1 bg-white/5 rounded-full text-xs text-white/50">
-                    WebP
-                  </span>
-                </div>
+            <div className="max-w-xs px-6 text-center">
+              <p className="text-base font-medium text-white">
+                Upload product image
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/65">
+                Choose a clear cover image for the catalog listing.
+              </p>
+              <p className="mt-4 text-xs uppercase tracking-wide text-white/45">
+                PNG, JPG, or WebP
+              </p>
+              <div className="mt-6 inline-flex rounded-lg border border-white/10 bg-[#241d49] px-4 py-2 text-sm font-medium text-white/85">
+                Select image
               </div>
             </div>
           )}
@@ -160,7 +135,7 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="text-center text-red-400 text-sm font-medium mt-3"
+              className="mt-3 text-sm font-medium text-red-400"
             >
               {errors.merchImage}
             </motion.p>
@@ -168,17 +143,19 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* --- Right Column: Form Fields --- */}
-      <div className="lg:col-span-7 flex flex-col justify-center">
+      <div className="flex flex-col justify-center lg:col-span-7">
         <div className="space-y-6">
-          {/* Row 1: Name & Price */}
-          <div className={`grid grid-cols-2  gap-6`}>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <InputBlock
               label="Product Name"
               error={errors.merchName}
               rightElement={
                 <span
-                  className={`text-xs font-medium ${formState.merchName.length >= 100 ? "text-red-400" : "text-white/30"}`}
+                  className={`text-xs font-medium ${
+                    formState.merchName.length >= 100
+                      ? "text-red-400"
+                      : "text-white/45"
+                  }`}
                 >
                   {formState.merchName.length}/100
                 </span>
@@ -187,55 +164,64 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
               <input
                 type="text"
                 value={formState.merchName}
-                onChange={(e) => onMerchNameChange(e.target.value)}
+                onChange={(e) => actions.setMerchName(e.target.value)}
                 placeholder="e.g. Limited Edition Hoodie"
                 maxLength={100}
-                className="w-full bg-transparent text-white text-lg font-medium placeholder-white/20 focus:outline-none"
+                className={`${inputClass} font-medium`}
               />
             </InputBlock>
 
-            <InputBlock label="Base Price" error={errors.basePrice}>
-              <div className="flex items-center gap-3 w-full">
-                <span className="text-purple-400 font-bold text-xl">₱</span>
+            <InputBlock
+              label="Base Price"
+              error={errors.basePrice}
+              rightElement={
+                isClothing ? (
+                  <span className="text-xs font-medium text-white/45">
+                    Set per size
+                  </span>
+                ) : undefined
+              }
+            >
+              <div className="flex w-full items-center gap-3">
+                <span className="text-sm font-medium uppercase tracking-wide text-white/45">
+                  PHP
+                </span>
                 <input
                   type="number"
                   value={formState.basePrice === 0 ? "" : formState.basePrice}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    onBasePriceChange(value);
-                  }}
+                  onChange={(e) => actions.setBasePrice(e.target.value)}
                   onWheel={(e) => e.currentTarget.blur()}
-                  placeholder="0.00"
+                  placeholder={"0.00"}
                   min="0"
                   step="0.01"
-                  className="w-full bg-transparent text-white text-lg font-bold placeholder-white/20 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className={`${inputClass} font-medium [appearance:textfield] disabled:cursor-not-allowed disabled:text-white/35 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                 />
               </div>
             </InputBlock>
           </div>
 
-          {/* Row 2: Category */}
-          <InputBlock
-            label="Product Category"
-            error={errors.merchType}
-            noPadding
-          >
+          <InputBlock label="Category" error={errors.merchType} noPadding>
             <CustomDropdown
               options={categoryOptions}
               value={formState.merchType}
-              onChange={(val) => onMerchTypeChange(val as MerchType | "")}
+              onChange={(value) =>
+                actions.setMerchType(value as MerchType | "")
+              }
               placeholder="Select category..."
               className="bg-transparent border-none !px-0 !py-0 ring-0 focus:ring-0"
             />
           </InputBlock>
 
-          {/* Row 3: Description */}
           <InputBlock
             label="Description"
             error={errors.description}
             rightElement={
               <span
-                className={`text-xs font-medium ${formState.description.length >= 500 ? "text-red-400" : "text-white/30"}`}
+                className={`text-xs font-medium ${
+                  formState.description.length >= 500
+                    ? "text-red-400"
+                    : "text-white/45"
+                }`}
               >
                 {formState.description.length}/500
               </span>
@@ -243,22 +229,21 @@ const MerchInfoStep: React.FC<MerchInfoStepProps> = ({
           >
             <textarea
               value={formState.description}
-              onChange={(e) => onDescriptionChange(e.target.value)}
-              placeholder="Describe your product - materials, features, and what makes it special..."
+              onChange={(e) => actions.setDescription(e.target.value)}
+              placeholder="Describe the product, materials, and any details shoppers should know."
               maxLength={500}
               rows={4}
-              className="w-full bg-transparent text-white text-base placeholder-white/20 focus:outline-none resize-none leading-relaxed"
+              className={`${inputClass} min-h-[120px] resize-none leading-relaxed`}
             />
           </InputBlock>
 
-          {/* Next Button */}
-          <div className="pt-4 flex justify-end">
+          <div className="flex justify-end pt-2">
             <button
-              onClick={onNext}
-              className="group w-full md:w-auto bg-[#FDE006] hover:brightness-110 text-black text-lg font-bold py-4 px-10 rounded-2xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3"
+              onClick={actions.goToVariants}
+              className="w-full rounded-lg bg-purple-600 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition-colors hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#110e31] md:w-auto"
+              type="button"
             >
-              <span>Continue to Variants</span>
-              <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
+              Continue
             </button>
           </div>
         </div>

@@ -10,7 +10,7 @@ import {
   exportInactiveMemberships,
 } from "../../../../api/studentMembership";
 import type { StudentMembershipResponse } from "../../../../interfaces/student/StudentMembership";
-import type { StudentResponse } from "../../../../interfaces/student/StudentResponse";
+import type { InactiveMembershipResponse } from "../../../../interfaces/student/InactiveMembershipResponse";
 import type { PaginatedResponse } from "../../../../interfaces/paginated";
 
 interface MemberTabsProps {
@@ -35,22 +35,28 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
 
   // Grant Membership Modal state
   const [grantModalOpen, setGrantModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<StudentResponse | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<{
+    studentId: string;
+    fullName: string;
+  } | null>(null);
 
   // Active members state
   const [activePage, setActivePage] = useState(0);
-  const [activeData, setActiveData] = useState<PaginatedResponse<StudentMembershipResponse> | null>(null);
+  const [activeData, setActiveData] =
+    useState<PaginatedResponse<StudentMembershipResponse> | null>(null);
   const [activeLoading, setActiveLoading] = useState(false);
   const [activeIsSearchMode, setActiveIsSearchMode] = useState(false);
 
   // Inactive members state
   const [inactivePage, setInactivePage] = useState(0);
-  const [inactiveData, setInactiveData] = useState<PaginatedResponse<StudentResponse> | null>(null);
+  const [inactiveData, setInactiveData] =
+    useState<PaginatedResponse<InactiveMembershipResponse> | null>(null);
   const [inactiveLoading, setInactiveLoading] = useState(false);
   const [inactiveIsSearchMode, setInactiveIsSearchMode] = useState(false);
 
   const queryTrimmed = searchQuery.trim();
-  const hasFilters = queryTrimmed !== "" || (activeTab === "inactive" && yearLevel !== "");
+  const hasFilters =
+    queryTrimmed !== "" || (activeTab === "inactive" && yearLevel !== "");
 
   const fetchActive = useCallback(async () => {
     try {
@@ -90,14 +96,7 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
           page: inactivePage,
           size: 7,
         });
-        
-        // Let's filter by yearLevel locally if API doesn't support it directly in search
-        // or assuming searchStudentMemberships handles it if it's not present there we might need to handle it.
-        // Looking at the old code, yearLevel wasn't even sent to searchStudentMemberships!
-        // The old code had inactiveYearLevel state but didn't pass it to API:
-        // const data = await searchStudentMemberships({ studentName, studentId, activeStatus: "INACTIVE", page, size });
-        
-        setInactiveData(data as unknown as PaginatedResponse<StudentResponse>);
+        setInactiveData(data);
         setInactiveIsSearchMode(true);
       } else {
         const data = await getInactiveMembersPaginated(inactivePage, 7);
@@ -144,14 +143,42 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
 
       if (activeTab === "active") {
         const data = await exportActiveMemberships();
-        const headers = ["Membership ID", "Student ID", "Date Joined", "Active", "Year Start", "Year End"];
-        const rows = data.map((m) => [m.membershipId, m.studentId, m.dateJoined, m.active ? "Yes" : "No", m.yearStart, m.yearEnd]);
-        downloadCSV(headers, rows, `active_members_${new Date().toISOString().split("T")[0]}.csv`);
+        const headers = [
+          "Membership ID",
+          "Student ID",
+          "Full Name",
+          "Date Joined",
+          "Active",
+          "Year Start",
+          "Year End",
+        ];
+        const rows = data.map((m) => [
+          m.membershipId,
+          m.studentId,
+          m.fullName,
+          m.dateJoined,
+          m.active ? "Yes" : "No",
+          m.yearStart,
+          m.yearEnd,
+        ]);
+        downloadCSV(
+          headers,
+          rows,
+          `active_members_${new Date().toISOString().split("T")[0]}.csv`,
+        );
       } else {
         const data = await exportInactiveMemberships();
-        const headers = ["Student ID", "First Name", "Last Name", "Year Level", "Email"];
-        const rows = data.map((s) => [s.studentId, s.user.firstName, s.user.lastName, s.yearLevel, s.user.email]);
-        downloadCSV(headers, rows, `non_members_${new Date().toISOString().split("T")[0]}.csv`);
+        const headers = ["Student ID", "Full Name"];
+        const rows = data.map((s) => [
+          s.studentId,
+          s.fullName ||
+            (s.user ? `${s.user.firstName} ${s.user.lastName}` : ""),
+        ]);
+        downloadCSV(
+          headers,
+          rows,
+          `non_members_${new Date().toISOString().split("T")[0]}.csv`,
+        );
       }
     } catch (err) {
       console.error("failed to export:", err);
@@ -160,10 +187,16 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
     }
   };
 
-  const downloadCSV = (headers: string[], rows: (string | number | boolean)[][], filename: string) => {
+  const downloadCSV = (
+    headers: string[],
+    rows: (string | number | boolean)[][],
+    filename: string,
+  ) => {
     const csvContent = [
       headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
+      ...rows.map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      ),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -183,7 +216,8 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
   ];
 
   const currentData = activeTab === "active" ? activeData : inactiveData;
-  const isSearchMode = activeTab === "active" ? activeIsSearchMode : inactiveIsSearchMode;
+  const isSearchMode =
+    activeTab === "active" ? activeIsSearchMode : inactiveIsSearchMode;
 
   return (
     <div className="flex flex-col gap-6">
@@ -243,12 +277,16 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
           <div className="w-full sm:w-48">
             <select
               value={yearLevel}
-              onChange={(e) => setYearLevel(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) =>
+                setYearLevel(e.target.value ? Number(e.target.value) : "")
+              }
               className="w-full bg-zinc-900/50 border border-white/5 rounded-xl text-sm text-zinc-200 px-4 py-2.5 focus:outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer"
             >
               <option value="">All Years</option>
               {[1, 2, 3, 4].map((y) => (
-                <option key={y} value={y}>Year {y}</option>
+                <option key={y} value={y}>
+                  Year {y}
+                </option>
               ))}
             </select>
           </div>
@@ -267,7 +305,8 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
       {/* Search results indicator */}
       {isSearchMode && currentData && (
         <p className="text-xs text-zinc-500 px-1 -mt-2">
-          Found {currentData.totalElements} result{currentData.totalElements !== 1 ? "s" : ""}
+          Found {currentData.totalElements} result
+          {currentData.totalElements !== 1 ? "s" : ""}
         </p>
       )}
 
@@ -287,8 +326,8 @@ const MemberTabs: React.FC<MemberTabsProps> = ({
             currentPage={inactivePage}
             onPageChange={setInactivePage}
             canEditFinance={canEditFinance}
-            onGrantMembership={(student) => {
-              setSelectedStudent(student);
+            onGrantMembership={(studentId, fullName) => {
+              setSelectedStudent({ studentId, fullName });
               setGrantModalOpen(true);
             }}
           />

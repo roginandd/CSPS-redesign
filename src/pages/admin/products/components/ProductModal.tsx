@@ -1,11 +1,14 @@
-import React, { useState, useCallback } from "react";
-import { FaTimes, FaCheck, FaBox, FaLayerGroup } from "react-icons/fa";
+import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { useMerchForm } from "../../../../hooks/useMerchForm";
-import { validateMerchInfo, validateVariants } from "../util/validation";
 import { createMerch } from "../../../../api/merch";
-import VariantStep from "./VariantStep";
+import { useMerchForm } from "../../../../hooks/useMerchForm";
 import MerchInfoStep from "./MerchInfoStep";
+import VariantStep from "./VariantStep";
+import type {
+  MerchInfoActions,
+  VariantActions,
+} from "./productForm.types";
+import { validateMerchInfo, validateVariants } from "../util/validation";
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -58,6 +61,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
       setValidationErrors(validation.errors);
       return;
     }
+
     setValidationErrors({});
     setCurrentStep(2);
   }, [formState]);
@@ -66,6 +70,12 @@ const ProductModal: React.FC<ProductModalProps> = ({
     setCurrentStep(1);
     setValidationErrors({});
   }, []);
+
+  const handleSuccessDismiss = useCallback(() => {
+    setShowSuccessModal(false);
+    handleClose();
+    onSuccess?.();
+  }, [handleClose, onSuccess]);
 
   const handleSubmit = useCallback(async () => {
     const variantValidation = validateVariants(formState);
@@ -86,11 +96,11 @@ const ProductModal: React.FC<ProductModalProps> = ({
         resetForm();
         setCurrentStep(1);
         setValidationErrors({});
-
         setShowSuccessModal(true);
       } else {
-        setSubmitError(result.error || "Failed to create product");
-        toast.error(result.error || "Failed to create product");
+        const message = result.error || "Failed to create product";
+        setSubmitError(message);
+        toast.error(message);
       }
     } catch (error) {
       const errorMessage =
@@ -100,125 +110,155 @@ const ProductModal: React.FC<ProductModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [formState, resetForm, onSuccess]);
+  }, [formState, resetForm]);
+
+  useEffect(() => {
+    if (!isOpen && !showSuccessModal) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      if (showSuccessModal) {
+        handleSuccessDismiss();
+        return;
+      }
+
+      handleClose();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleClose, handleSuccessDismiss, isOpen, showSuccessModal]);
 
   if (!isOpen && !showSuccessModal) return null;
 
-  // Step Indicator Component
+  const stepContent = {
+    1: {
+      title: "Create Product",
+      description: "Add the core merchandise details before setting up variants.",
+    },
+    2: {
+      title: "Set Up Variants",
+      description: "Configure stock, prices, and options for each product variant.",
+    },
+  } as const;
+
+  const merchInfoActions: MerchInfoActions = {
+    setMerchName,
+    setDescription,
+    setMerchType,
+    setBasePrice,
+    uploadMerchImage: handleMerchImageUpload,
+    goToVariants: handleNextStep,
+  };
+
+  const variantActions: VariantActions = {
+    goBack: handleBackStep,
+    addClothingVariant: handleAddClothingVariant,
+    addNonClothingVariant: handleAddNonClothingVariant,
+    updateClothingVariant: handleClothingVariantChange,
+    updateNonClothingVariant: handleNonClothingVariantChange,
+    toggleSize: handleSizeCheckChange,
+    updateSizeStock: handleStockQuantityChange,
+    updateSizePrice: handlePriceChangeForSize,
+    uploadVariantImage: handleVariantImageUpload,
+    removeClothingVariant: handleDeleteClothingVariant,
+    removeNonClothingVariant: handleDeleteNonClothingVariant,
+    submit: handleSubmit,
+  };
+
   const StepIndicator = () => (
-    <div className="flex items-center justify-center gap-3 mb-8">
-      {/* Step 1 */}
-      <div className="flex items-center gap-3">
-        <div
-          className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${
-            currentStep >= 1
-              ? "bg-gradient-to-br from-purple-500 to-purple-700"
-              : "bg-white/10"
-          }`}
-        >
-          {currentStep > 1 ? (
-            <FaCheck className="text-white text-lg" />
-          ) : (
-            <FaBox
-              className={`text-lg ${currentStep === 1 ? "text-white" : "text-white/40"}`}
-            />
-          )}
-          {currentStep === 1 && (
-            <div className="absolute inset-0 rounded-2xl bg-purple-400/20 animate-pulse" />
-          )}
-        </div>
-        <div className="hidden sm:block">
-          <p
-            className={`text-sm font-bold ${currentStep >= 1 ? "text-white" : "text-white/40"}`}
-          >
-            Product Info
-          </p>
-          <p className="text-xs text-white/40">Basic details</p>
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {[
+        {
+          step: 1,
+          label: "Product Info",
+          description: "Name, category, image, and description",
+        },
+        {
+          step: 2,
+          label: "Variants",
+          description: "Stock levels, prices, and product options",
+        },
+      ].map(({ step, label, description }) => {
+        const isActive = currentStep === step;
+        const isComplete = currentStep > step;
 
-      {/* Connector */}
-      <div className="flex-1 max-w-[80px] h-1 rounded-full bg-white/10 overflow-hidden">
-        <div
-          className={`h-full bg-gradient-to-r from-purple-500 to-purple-400 transition-all duration-500 ${
-            currentStep >= 2 ? "w-full" : "w-0"
-          }`}
-        />
-      </div>
-
-      {/* Step 2 */}
-      <div className="flex items-center gap-3">
-        <div
-          className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${
-            currentStep >= 2
-              ? "bg-gradient-to-br from-purple-500 to-purple-700"
-              : "bg-white/10"
-          }`}
-        >
-          <FaLayerGroup
-            className={`text-lg ${currentStep >= 2 ? "text-white" : "text-white/40"}`}
-          />
-          {currentStep === 2 && (
-            <div className="absolute inset-0 rounded-2xl bg-purple-400/20 animate-pulse" />
-          )}
-        </div>
-        <div className="hidden sm:block">
-          <p
-            className={`text-sm font-bold ${currentStep >= 2 ? "text-white" : "text-white/40"}`}
+        return (
+          <div
+            key={step}
+            className={`rounded-xl border px-4 py-4 transition-colors sm:px-5 ${
+              isActive
+                ? "border-purple-500/35 bg-purple-500/10"
+                : isComplete
+                  ? "border-white/10 bg-[#1a1635]"
+                  : "border-white/10 bg-[#140f33]"
+            }`}
           >
-            Variants
-          </p>
-          <p className="text-xs text-white/40">Stock & options</p>
-        </div>
-      </div>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-medium uppercase tracking-wide text-white/45">
+                  Step {step}
+                </p>
+                <p
+                  className={`mt-2 text-sm font-semibold sm:text-base ${
+                    isActive || isComplete ? "text-white" : "text-white/70"
+                  }`}
+                >
+                  {label}
+                </p>
+                <p className="mt-1 text-sm leading-5 text-white/55">
+                  {description}
+                </p>
+              </div>
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full border text-sm font-semibold ${
+                  isActive
+                    ? "border-purple-500/35 bg-purple-500/15 text-white"
+                    : isComplete
+                      ? "border-white/10 bg-[#241d49] text-white"
+                      : "border-white/10 bg-[#181238] text-white/50"
+                }`}
+              >
+                {step.toString().padStart(2, "0")}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 
-  // Success Modal Component
   const SuccessModal = ({ isSuccess }: { isSuccess: boolean }) =>
     isSuccess && (
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-        <div className="relative bg-gradient-to-b from-[#1e1a4a] to-[#151238] rounded-3xl border border-white/10 p-10 max-w-md w-full text-center overflow-hidden">
-          {/* Background glow effect */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-green-500/20 rounded-full blur-3xl" />
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-success-title"
+          className="w-full max-w-md overflow-hidden rounded-xl border border-white/10 bg-[#110e31] p-6 shadow-2xl shadow-black/50 sm:p-8"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-white/45">
+            Product Added
+          </p>
+          <h3
+            id="product-success-title"
+            className="mt-3 text-2xl font-bold text-white"
+          >
+            Product created successfully.
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-white/65 sm:text-base">
+            The product has been added to the catalog and is ready for inventory
+            management.
+          </p>
 
-          <div className="relative z-10">
-            {/* Success Icon */}
-            <div className="mb-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto transform rotate-3">
-                <svg
-                  className="w-10 h-10 text-white"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={3}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <h3 className="text-2xl font-bold text-white mb-3">
-              Product Created!
-            </h3>
-            <p className="text-white/60 mb-8 leading-relaxed">
-              Your new merchandise has been successfully added to the catalog
-              and is ready for sale.
-            </p>
-
+          <div className="mt-6 flex justify-end">
             <button
-              onClick={() => {
-                setShowSuccessModal(false);
-                handleClose();
-                onSuccess?.();
-              }}
-              className="w-full bg-[#FDE006] hover:brightness-110 text-black font-bold py-4 px-8 rounded-2xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+              onClick={handleSuccessDismiss}
+              className="rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-purple-900/30 transition-colors hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#110e31]"
+              type="button"
             >
-              Continue to Products
+              Done
             </button>
           </div>
         </div>
@@ -229,93 +269,79 @@ const ProductModal: React.FC<ProductModalProps> = ({
     <>
       <SuccessModal isSuccess={showSuccessModal} />
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6">
-          <div className="relative w-full max-w-6xl bg-gradient-to-b from-[#1e1a4a] to-[#151238] rounded-3xl border border-white/10 overflow-hidden animate-in fade-in zoom-in duration-300">
-            {/* Header */}
-            <div className="relative px-6 md:px-10 pt-8 pb-6 border-b border-white/5">
-              {/* Background accent */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-4 backdrop-blur-sm sm:p-6">
+          <div className="flex min-h-full items-center justify-center">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="product-modal-title"
+              aria-describedby="product-modal-description"
+              className="relative w-full max-w-5xl overflow-hidden rounded-xl border border-white/10 bg-[#110e31] text-white shadow-2xl shadow-black/50 animate-in fade-in zoom-in duration-300"
+            >
+              <div className="border-b border-white/10 px-6 py-5 md:px-8">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium uppercase tracking-wide text-white/45">
+                      Product Setup
+                    </p>
+                    <h2
+                      id="product-modal-title"
+                      className="mt-2 text-2xl font-bold text-white"
+                    >
+                      {stepContent[currentStep].title}
+                    </h2>
+                    <p
+                      id="product-modal-description"
+                      className="mt-2 max-w-2xl text-sm leading-6 text-white/65"
+                    >
+                      {stepContent[currentStep].description}
+                    </p>
+                  </div>
 
-              {/* Close Button */}
-              <button
-                onClick={handleClose}
-                className="absolute top-6 right-6 w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all duration-200"
-                aria-label="Close modal"
-              >
-                <FaTimes size={18} />
-              </button>
-
-              {/* Title Section */}
-              <div className="relative z-10 text-center sm:text-left">
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-                  {currentStep === 1 ? "Add New Product" : "Configure Variants"}
-                </h2>
-                <p className="text-white/50 text-sm sm:text-base">
-                  {currentStep === 1
-                    ? "Fill in the basic information about your merchandise"
-                    : "Set up stock quantities and pricing options"}
-                </p>
+                  <button
+                    onClick={handleClose}
+                    className="shrink-0 self-start rounded-lg border border-white/10 bg-[#1a1635] px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:border-white/15 hover:bg-[#241d49] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#110e31]"
+                    aria-label="Close product modal"
+                    type="button"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
 
-              {/* Step Indicator */}
-              <div className="mt-8">
+              <div className="border-b border-white/10 px-6 py-4 md:px-8">
                 <StepIndicator />
               </div>
-            </div>
 
-            {/* Content Area */}
-            <div className="px-6 md:px-10 py-8 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-              {/* Submit Error Alert */}
-              {submitError && (
-                <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-red-500/20 flex items-center justify-center flex-shrink-0">
-                    <FaTimes className="text-red-400" size={14} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-red-400">
+              <div className="max-h-[72vh] overflow-y-auto px-6 py-6 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent md:px-8 md:py-8">
+                {submitError && (
+                  <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-4">
+                    <p className="text-sm font-medium text-red-300">
+                      We couldn&apos;t create the product yet.
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-red-200/80">
                       {submitError}
                     </p>
-                    <p className="text-xs text-red-400/60 mt-1">
-                      Please check your inputs and try again.
-                    </p>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Step 1: Base Merch Information */}
-              {currentStep === 1 && (
-                <MerchInfoStep
-                  formState={formState}
-                  errors={validationErrors}
-                  onMerchNameChange={setMerchName}
-                  onDescriptionChange={setDescription}
-                  onMerchTypeChange={setMerchType}
-                  onBasePriceChange={setBasePrice}
-                  onMerchImageUpload={handleMerchImageUpload}
-                  onNext={handleNextStep}
-                />
-              )}
+                {currentStep === 1 && (
+                  <MerchInfoStep
+                    formState={formState}
+                    errors={validationErrors}
+                    actions={merchInfoActions}
+                  />
+                )}
 
-              {/* Step 2: Variant Management */}
-              {currentStep === 2 && (
-                <VariantStep
-                  formState={formState}
-                  errors={validationErrors}
-                  isLoading={isLoading}
-                  onBack={handleBackStep}
-                  onAddClothingVariant={handleAddClothingVariant}
-                  onAddNonClothingVariant={handleAddNonClothingVariant}
-                  onClothingVariantChange={handleClothingVariantChange}
-                  onNonClothingVariantChange={handleNonClothingVariantChange}
-                  onSizeCheckChange={handleSizeCheckChange}
-                  onStockQuantityChange={handleStockQuantityChange}
-                  onPriceChangeForSize={handlePriceChangeForSize}
-                  onVariantImageUpload={handleVariantImageUpload}
-                  onDeleteClothingVariant={handleDeleteClothingVariant}
-                  onDeleteNonClothingVariant={handleDeleteNonClothingVariant}
-                  onSubmit={handleSubmit}
-                />
-              )}
+                {currentStep === 2 && (
+                  <VariantStep
+                    formState={formState}
+                    errors={validationErrors}
+                    isLoading={isLoading}
+                    actions={variantActions}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>

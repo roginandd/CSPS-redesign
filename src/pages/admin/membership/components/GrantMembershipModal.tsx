@@ -1,14 +1,22 @@
 import React, { useState } from "react";
 import { createStudentMembership } from "../../../../api/studentMembership";
-import type { StudentResponse } from "../../../../interfaces/student/StudentResponse";
 import {
   CURRENT_YEAR_START,
   CURRENT_YEAR_END,
 } from "../../../../components/nav/constants";
 
+/**
+ * Simplified student info needed for granting membership.
+ * Contains only studentId (for API call) and fullName (for display).
+ */
+interface StudentInfo {
+  studentId: string;
+  fullName: string;
+}
+
 interface GrantMembershipModalProps {
   isOpen: boolean;
-  student: StudentResponse | null;
+  student: StudentInfo | null;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -19,7 +27,7 @@ interface GrantMembershipModalProps {
  * to the backend, which auto-determines the active flag.
  *
  * @param isOpen    - whether the modal is visible
- * @param student   - the student receiving the membership
+ * @param student   - the student receiving the membership (studentId and fullName)
  * @param onClose   - callback to close the modal
  * @param onSuccess - callback on successful membership creation
  */
@@ -33,8 +41,6 @@ const GrantMembershipModal: React.FC<GrantMembershipModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !student) return null;
-
-  const isCurrentYear = true; // Always granting for the current academic year
 
   const handleSubmit = async () => {
     if (!student) return;
@@ -109,11 +115,8 @@ const GrantMembershipModal: React.FC<GrantMembershipModalProps> = ({
               <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-1">
                 Student
               </p>
-              <p className="text-white font-medium">
-                {student.user.firstName} {student.user.lastName}
-              </p>
+              <p className="text-white font-medium">{student.fullName}</p>
               <p className="text-xs text-zinc-400 mt-1">{student.studentId}</p>
-              <p className="text-xs text-zinc-400 mt-1">{student.user.email}</p>
             </div>
 
             {/* Academic Year Pass Info */}
@@ -139,12 +142,10 @@ const GrantMembershipModal: React.FC<GrantMembershipModalProps> = ({
               <p className="text-2xl font-bold text-white tracking-tight">
                 {CURRENT_YEAR_START}–{CURRENT_YEAR_END}
               </p>
-              {isCurrentYear && (
-                <p className="text-xs text-purple-400 mt-1">
-                  This is the current academic year — membership will be
-                  activated immediately
-                </p>
-              )}
+              <p className="text-xs text-purple-400 mt-1">
+                This is the current academic year — membership will be activated
+                immediately
+              </p>
             </div>
 
             {/* Error Message */}

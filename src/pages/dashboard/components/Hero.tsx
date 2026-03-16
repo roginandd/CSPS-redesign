@@ -25,7 +25,6 @@ const Hero = () => {
                 "
         />
       </div>
-
       {/* Right */}
       <div className="flex justify-center md:justify-start  flex-col w-full md:w-1/2 text-center md:text-left mt-36 md:mt-0 py-[14rem]">
         <h1 className="text-4xl sm:text-5xl md:text-4xl lg:text-6xl font-semibold">

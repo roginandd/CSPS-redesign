@@ -67,9 +67,7 @@ const ActiveMembersTable: React.FC<ActiveMembersTableProps> = ({
   if (!loading && members.length === 0) {
     return (
       <div className="bg-[#1E1E3F] border border-white/5 rounded-2xl p-16 text-center">
-        <h3 className="text-xl font-bold text-white mb-2">
-          No Active Members
-        </h3>
+        <h3 className="text-xl font-bold text-white mb-2">No Active Members</h3>
         <p className="text-white/50 max-w-md mx-auto">
           There are no students with active memberships at this time.
         </p>
@@ -83,16 +81,19 @@ const ActiveMembersTable: React.FC<ActiveMembersTableProps> = ({
         <table className="w-full text-sm text-left">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase"> 
-                Student
+              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase">
+                Name
               </th>
-              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase"> 
+              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase">
+                ID
+              </th>
+              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase">
                 Academic Year
               </th>
-              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase"> 
+              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase">
                 Date Joined
               </th>
-              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase"> 
+              <th className="px-4 py-3 text-xs font-medium text-zinc-500 tracking-wide uppercase">
                 Status
               </th>
             </tr>
@@ -115,10 +116,14 @@ const ActiveMembersTable: React.FC<ActiveMembersTableProps> = ({
                     </td>
                   </tr>
                 ))
-              : members.map((m) => (                  <tr
+              : members.map((m) => (
+                  <tr
                     key={m.membershipId}
-                    className="border-b border-white/5 hover:bg-white/[0.02] transition-colors"
+                    className="border-b border-white/5 hover:bg-white/2 transition-colors"
                   >
+                    <td className="px-4 py-4">
+                      <p className="text-white font-medium">{m.fullName}</p>
+                    </td>
                     <td className="px-4 py-4">
                       <p className="text-white font-medium">{m.studentId}</p>
                     </td>
