@@ -17,8 +17,8 @@ const Layout = ({
   children,
   overflowHidden,
   containerScreen,
-  classNameContainer,
-  classNameInner,
+  classNameContainer = "",
+  classNameInner = "",
   withFooter = true,
 }: LayoutProps) => {
   const isLoggingOut = useAuthStore((state) => state.isLoggingOut);

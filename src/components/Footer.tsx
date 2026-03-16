@@ -24,10 +24,6 @@ const FOOTERS = [
     title: "Accreditation",
     subs: ["Student Affairs", "Office (SAO)"],
   },
-  {
-    title: "Others",
-    subs: ["Forum", "Showcase", "Learning Materials", "Send Feedback"],
-  },
 ];
 
 const Footer = () => {
@@ -185,26 +181,6 @@ const DesktopFooter = () => {
           <br />
           Office (SAO)
         </p>
-      </div>
-
-      <div>
-        <h4 className="text-white text-lg lg:text-2xl font-semibold mb-4 lg:mb-6">
-          OTHERS
-        </h4>
-        <ul className="space-y-2 lg:space-y-3">
-          {["Forum", "Showcase", "Learning Materials", "Send Feedback"].map(
-            (item, idx) => (
-              <li key={idx}>
-                <a
-                  href="#"
-                  className="text-white text-sm lg:text-xl hover:text-cs-gold transition-colors"
-                >
-                  {item}
-                </a>
-              </li>
-            ),
-          )}
-        </ul>
       </div>
     </div>
   );
