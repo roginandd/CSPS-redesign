@@ -18,18 +18,22 @@ export interface StudentMembershipRequest {
  *
  * @field membershipId - unique membership identifier
  * @field studentId    - owning student's ID
+ * @field fullName     - student's full name
  * @field dateJoined   - ISO datetime when the membership was created
  * @field active       - whether this membership is currently active
  * @field yearStart    - start calendar year (e.g. 2025)
  * @field yearEnd      - end calendar year (e.g. 2026)
+ * @field academicYearRange - formatted academic year range string (e.g. "2025–2026")
  */
 export interface StudentMembershipResponse {
   membershipId: number;
+  fullName: string;
   studentId: string;
   dateJoined: string;
   active: boolean;
   yearStart: number;
   yearEnd: number;
+  academicYearRange?: string;
 }
 
 /**

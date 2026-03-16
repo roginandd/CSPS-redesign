@@ -4,6 +4,7 @@ export const MerchType = {
   STICKER: "STICKER",
   KEYCHAIN: "KEYCHAIN",
   MEMBERSHIP: "MEMBERSHIP",
+  TICKET: "TICKET",
 } as const;
 
 export type MerchType = (typeof MerchType)[keyof typeof MerchType];

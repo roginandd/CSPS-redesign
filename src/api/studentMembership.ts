@@ -5,8 +5,8 @@ import type {
 } from "../interfaces/student/StudentMembership";
 import type { BulkStudentMembershipRequest } from "../interfaces/student/BulkStudentMembershipRequest";
 import type { PaginatedResponse } from "../interfaces/paginated";
-import type { StudentResponse } from "../interfaces/student/StudentResponse";
 import type { MembershipRatioResponse } from "../interfaces/student/MembershipRatioResponse";
+import type { InactiveMembershipResponse } from "../interfaces/student/InactiveMembershipResponse";
 
 /**
  * Create a new student membership
@@ -121,13 +121,13 @@ export const getActiveMembersPaginated = async (
  *
  * @param page - zero-based page index (default 0)
  * @param size - items per page (default 7)
- * @returns paginated student responses for inactive members
+ * @returns paginated inactive membership records (studentId, fullName only)
  */
 export const getInactiveMembersPaginated = async (
   page: number = 0,
   size: number = 7,
-): Promise<PaginatedResponse<StudentResponse>> => {
-  const response = await api.get<PaginatedResponse<StudentResponse>>(
+): Promise<PaginatedResponse<InactiveMembershipResponse>> => {
+  const response = await api.get<PaginatedResponse<InactiveMembershipResponse>>(
     "/student-memberships/inactive/paginated",
     { params: { page, size } },
   );
@@ -185,20 +185,33 @@ export interface MembershipSearchParams {
 
 /**
  * Search student memberships with optional filters.
+ * When activeStatus is "INACTIVE", returns minimal inactive membership data (studentId, fullName).
+ * When activeStatus is "ACTIVE" or omitted, returns full membership data.
  * Endpoint: GET /api/student-memberships/search
  *
  * @param params - search query parameters (all optional)
- * @returns paginated student membership results
+ * @returns paginated results - shape depends on activeStatus parameter
+ *
+ * @overload - For INACTIVE status, returns minimal inactive membership response
+ * @overload - For ACTIVE status or no status, returns full membership response
  */
-export const searchStudentMemberships = async (
+export async function searchStudentMemberships(
+  params: MembershipSearchParams & { activeStatus: "INACTIVE" },
+): Promise<PaginatedResponse<InactiveMembershipResponse>>;
+export async function searchStudentMemberships(
+  params?: MembershipSearchParams & { activeStatus?: "ACTIVE" | undefined },
+): Promise<PaginatedResponse<StudentMembershipResponse>>;
+export async function searchStudentMemberships(
   params: MembershipSearchParams = {},
-): Promise<PaginatedResponse<StudentMembershipResponse>> => {
-  const response = await api.get<PaginatedResponse<StudentMembershipResponse>>(
-    "/student-memberships/search",
-    { params },
-  );
+): Promise<
+  | PaginatedResponse<StudentMembershipResponse>
+  | PaginatedResponse<InactiveMembershipResponse>
+> {
+  const response = await api.get<
+    PaginatedResponse<StudentMembershipResponse | InactiveMembershipResponse>
+  >("/student-memberships/search", { params });
   return response.data;
-};
+}
 
 /**
  * Export full unpaginated list of active members (CSV export).
@@ -219,12 +232,12 @@ export const exportActiveMemberships = async (): Promise<
  * Export full unpaginated list of inactive/non-members (CSV export).
  * Endpoint: GET /api/student-memberships/inactive/export
  *
- * @returns full list of non-member student records
+ * @returns full list of non-member records (studentId, fullName only)
  */
 export const exportInactiveMemberships = async (): Promise<
-  StudentResponse[]
+  InactiveMembershipResponse[]
 > => {
-  const response = await api.get<StudentResponse[]>(
+  const response = await api.get<InactiveMembershipResponse[]>(
     "/student-memberships/inactive/export",
   );
   return response.data;
@@ -248,4 +261,3 @@ export const bulkCreateMemberships = async (
   );
   return response.data;
 };
-
