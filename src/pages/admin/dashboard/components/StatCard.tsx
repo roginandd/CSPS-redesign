@@ -13,6 +13,9 @@ interface StatCardProps {
   isLoading?: boolean;
 }
 
+const shellClass =
+  "rounded-[24px] border border-white/10 bg-[#110e31]/80 p-5 shadow-xl shadow-black/20 sm:p-6";
+
 const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
@@ -23,46 +26,46 @@ const StatCard: React.FC<StatCardProps> = ({
 }) => {
   if (isLoading) {
     return (
-      <section className="bg-[#0F033C]/80 border border-white/10 rounded-2xl p-6 animate-pulse">
-        <header className="flex justify-between items-start mb-4">
-          <span className="w-10 h-10 bg-white/5 rounded-xl" />
-          <span className="w-16 h-4 bg-white/5 rounded" />
+      <section className={`${shellClass} animate-pulse`}>
+        <header className="mb-5 flex items-start justify-between gap-4">
+          <span className="h-12 w-12 rounded-2xl border border-white/10 bg-[#1a1635]" />
+          <span className="h-6 w-20 rounded-full bg-[#1a1635]" />
         </header>
-        <p className="w-24 h-8 bg-white/5 rounded mb-2" />
-        <p className="w-32 h-3 bg-white/5 rounded" />
+        <p className="h-3 w-28 rounded bg-[#1a1635]" />
+        <p className="mt-3 h-9 w-24 rounded bg-[#1a1635]" />
+        <p className="mt-3 h-3 w-40 rounded bg-[#1a1635]" />
       </section>
     );
   }
 
   return (
-    <section className="bg-[#0F033C]/80 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:border-purple-500/30 transition-all group">
-      <header className="flex justify-between items-start mb-4">
-        <span className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-          <Icon size={24} />
+    <section className={`${shellClass} transition-colors hover:border-purple-500/25`}>
+      <header className="mb-5 flex items-start justify-between gap-4">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-[#1a1635] text-purple-200">
+          <Icon size={22} />
         </span>
         {trend && (
           <span
-            className={`text-xs font-bold px-2 py-1 rounded-full ${
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
               trend.isPositive
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-red-500/10 text-red-400"
+                ? "bg-emerald-500/15 text-emerald-200"
+                : "bg-red-500/15 text-red-200"
             }`}
           >
             {trend.value}
           </span>
         )}
       </header>
-      <article>
-        <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">
-          {title}
-        </p>
-        <h3 className="text-3xl font-bold text-white">{value}</h3>
-        {description && (
-          <p className="text-xs text-gray-400 mt-2 font-medium">
-            {description}
-          </p>
-        )}
-      </article>
+
+      <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+        {title}
+      </p>
+      <h3 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+        {value}
+      </h3>
+      {description && (
+        <p className="mt-3 text-sm leading-6 text-white/62">{description}</p>
+      )}
     </section>
   );
 };

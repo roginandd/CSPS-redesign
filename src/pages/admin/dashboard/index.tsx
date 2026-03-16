@@ -1,15 +1,14 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AuthenticatedNav from "../../../components/AuthenticatedNav";
 import {
-  Users,
+  AlertTriangle,
   Calendar,
   LayoutDashboard,
-  ArrowUpRight,
   Package,
+  Users,
 } from "lucide-react";
-import StatCard from "./components/StatCard";
-import QuickActions from "./components/QuickActions";
-import ActivityFeed, { type ActivityItem } from "./components/ActivityFeed";
+import { useNavigate } from "react-router-dom";
+import type { EventResponse } from "../../../interfaces/event/EventResponse";
 import {
   getFinanceDashboard,
   type FinanceDashboardDTO,
@@ -17,32 +16,69 @@ import {
 import { getUpcomingEvents } from "../../../api/event";
 import { S3_BASE_URL } from "../../../constant";
 import Layout from "../../../components/Layout";
-import { useNavigate } from "react-router-dom";
+import StatCard from "./components/StatCard";
+import QuickActions from "./components/QuickActions";
+import ActivityFeed, { type ActivityItem } from "./components/ActivityFeed";
+
+const cardShell =
+  "rounded-[28px] border border-white/10 bg-[#110e31]/80 p-6 shadow-xl shadow-black/20 sm:p-8";
+
+const normalizeUpcomingEvents = (value: unknown): EventResponse[] => {
+  if (Array.isArray(value)) {
+    return value as EventResponse[];
+  }
+
+  if (value && typeof value === "object") {
+    const maybeContent = (value as { content?: unknown }).content;
+    if (Array.isArray(maybeContent)) {
+      return maybeContent as EventResponse[];
+    }
+
+    const maybeData = (value as { data?: unknown }).data;
+    if (Array.isArray(maybeData)) {
+      return maybeData as EventResponse[];
+    }
+  }
+
+  return [];
+};
+
+const formatEventDate = (value: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
 
 const Index = () => {
   const [dashboardData, setDashboardData] =
     useState<FinanceDashboardDTO | null>(null);
-  const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<EventResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      setLoadError(null);
+
       try {
         const [dash, events] = await Promise.all([
           getFinanceDashboard(),
           getUpcomingEvents(),
         ]);
+
         setDashboardData(dash);
-        setUpcomingEvents(events);
-      } catch (err) {
-        console.error("Dashboard fetch error:", err);
+        setUpcomingEvents(normalizeUpcomingEvents(events));
+      } catch {
+        setLoadError("Unable to load the dashboard right now. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
@@ -51,7 +87,6 @@ const Index = () => {
 
     const items: ActivityItem[] = [];
 
-    // Add recent orders
     dashboardData.recentOrders.slice(0, 3).forEach((order) => {
       items.push({
         id: order.orderItemId,
@@ -62,182 +97,337 @@ const Index = () => {
       });
     });
 
-    // Add recent memberships
-    dashboardData.recentMemberships.slice(0, 3).forEach((mem) => {
+    dashboardData.recentMemberships.slice(0, 3).forEach((member) => {
       items.push({
-        id: mem.studentId,
+        id: member.studentId,
         type: "MEMBERSHIP",
-        title: "New Membership Registration",
-        subtitle: `${mem.fullName} joined as a member`,
+        title: "New membership registration",
+        subtitle: `${member.fullName} joined as a member`,
         time: "Recently",
       });
     });
 
-    // Add announcements
-
     return items;
   }, [dashboardData]);
 
+  const inventoryAlerts = useMemo(
+    () =>
+      dashboardData?.inventory.filter((item) => item.stockStatus !== "IN_STOCK") ??
+      [],
+    [dashboardData],
+  );
+
+  const nextEvents = useMemo(() => upcomingEvents.slice(0, 3), [upcomingEvents]);
+
+  const memberPercentage =
+    dashboardData?.membershipRatio.memberPercentage.toFixed(1) ?? "0.0";
+  const nextEvent = nextEvents[0];
+
   return (
     <Layout>
-      <main className="relative w-full max-w-[90rem] mx-auto px-4 md:px-8 py-6 text-white">
+      <main className="mx-auto w-full max-w-[92rem] px-4 pb-16 pt-6 text-white sm:px-6 lg:px-8">
         <AuthenticatedNav />
 
-          <section className="mt-10 space-y-10">
-            {/* Header */}
-            <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <section>
-                <nav className="flex items-center gap-2 mb-2"></nav>
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-white via-white to-purple-400 bg-clip-text text-transparent">
+        <div className="mt-8 space-y-8 sm:mt-10 lg:space-y-10">
+          <header className={`${cardShell} overflow-hidden`}>
+            <div className="grid gap-8 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.95fr)] xl:items-end">
+              <div>
+                <span className="inline-flex rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-100">
+                  Admin Overview
+                </span>
+                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-[3.25rem]">
                   Dashboard
                 </h1>
-                <p className="text-gray-400 mt-2 text-lg">
-                  Central command for organization oversight.
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/68 sm:text-base">
+                  Track student membership, merchandise health, and upcoming
+                  organization activity from one place.
                 </p>
-              </section>
-            </header>
 
-            {/* Stats Row */}
-            <nav className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <StatCard
-                title="Total Organization Students"
-                value={dashboardData?.membershipRatio.totalStudents ?? 0}
-                icon={Users}
-                isLoading={isLoading}
-                trend={{ value: "+12%", isPositive: true }}
-              />
-              <StatCard
-                title="Active Paid Members"
-                value={dashboardData?.membershipRatio.paidMembersCount ?? 0}
-                icon={LayoutDashboard}
-                isLoading={isLoading}
-                description={`${dashboardData?.membershipRatio.memberPercentage.toFixed(1)}% of total students`}
-              />
+                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-white/10 bg-[#1a1635] px-4 py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Active Members
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {dashboardData?.membershipRatio.paidMembersCount ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-[#1a1635] px-4 py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Paid Ratio
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {memberPercentage}%
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-[#1a1635] px-4 py-4">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Inventory Alerts
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-white">
+                      {inventoryAlerts.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <StatCard
-                title="Upcoming events"
-                value={upcomingEvents.length ?? 0}
-                icon={Calendar}
-                isLoading={isLoading}
-                description="Scheduled this month"
-              />
-            </nav>
+              <div className="rounded-[24px] border border-white/10 bg-[#1a1635] p-5 sm:p-6">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                  Current Focus
+                </p>
+                <h2 className="mt-3 text-xl font-semibold text-white">
+                  {nextEvent ? nextEvent.eventName : "No upcoming events"}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-white/65">
+                  {nextEvent
+                    ? `${formatEventDate(nextEvent.eventDate)} at ${nextEvent.eventLocation}`
+                    : "Once events are scheduled, the next one will appear here."}
+                </p>
 
-            {/* Main Content Grid */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              {/* Left Column: Activity & Overview */}
-              <article className="lg:col-span-2 space-y-10">
-                {/* Activity Section */}
-                <section className="bg-[#0F033C]/40 border border-white/5 rounded-3xl p-8 backdrop-blur-sm shadow-xl shadow-black/20">
-                  <header className="flex justify-between items-center mb-8">
-                    <h2 className="text-xl font-bold flex items-center gap-3">
-                      Recent Activity
-                      <span className="text-[10px] font-bold py-1 px-2 rounded-full bg-purple-500/10 text-purple-400 uppercase border border-purple-500/20">
-                        Real-time
-                      </span>
-                    </h2>
-                    <button className="text-xs font-bold text-gray-500 hover:text-white uppercase transition-colors flex items-center gap-1 cursor-pointer">
-                      View All <ArrowUpRight size={12} />
-                    </button>
-                  </header>
-                  <ActivityFeed activities={activities} isLoading={isLoading} />
-                </section>
+                <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                  <button
+                    onClick={() => navigate("/admin/merch/products")}
+                    className="rounded-xl bg-purple-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1635]"
+                    type="button"
+                  >
+                    Manage Store
+                  </button>
+                  <div className="rounded-xl border border-white/10 bg-[#140f33] px-4 py-3">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Upcoming Events
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-white">
+                      {upcomingEvents.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </header>
 
-                {/* Inventory Peek */}
-                <section className="bg-[#0F033C]/40 border border-white/5 rounded-3xl p-8 backdrop-blur-sm shadow-xl shadow-black/20">
-                  <header className="flex justify-between items-center mb-8">
-                    <article>
-                      <h2 className="text-xl font-bold">Inventory Alerts</h2>
-                      <p className="text-xs text-gray-500 mt-1 uppercase">
-                        Critical Stock Levels
-                      </p>
-                    </article>
-                    <button
-                      onClick={() => navigate("/admin/merch/products")}
-                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shadow-lg shadow-purple-900/20 cursor-pointer"
-                    >
-                      Manage Store
-                    </button>
-                  </header>
-
-                  <nav className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {isLoading ? (
-                      Array.from({ length: 2 }).map((_, i) => (
-                        <span
-                          key={i}
-                          className="h-24 bg-white/5 rounded-2xl animate-pulse"
-                        />
-                      ))
-                    ) : dashboardData?.inventory.filter(
-                        (i) => i.stockStatus !== "IN_STOCK",
-                      ).length === 0 ? (
-                      <footer className="col-span-full py-10 text-center bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
-                        <p className="text-emerald-400 text-sm font-medium">
-                          All items adequately stocked.
-                        </p>
-                      </footer>
-                    ) : (
-                      dashboardData?.inventory
-                        .filter((i) => i.stockStatus !== "IN_STOCK")
-                        .map((item) => (
-                          <article
-                            key={item.id}
-                            className="flex items-center gap-4 p-4 rounded-2xl bg-black/20 border border-white/5"
-                          >
-                            <span className="w-14 h-14 rounded-xl bg-white/5 p-2 shrink-0">
-                              <img
-                                src={
-                                  item.s3ImageKey
-                                    ? `${S3_BASE_URL}${item.s3ImageKey}`
-                                    : "/placeholder.png"
-                                }
-                                alt={item.name}
-                                className="w-full h-full object-contain"
-                              />
-                            </span>
-                            <section className="flex-1 min-w-0">
-                              <h4 className="text-sm font-bold text-white truncate">
-                                {item.name}
-                              </h4>
-                              <nav className="flex items-center gap-2 mt-1">
-                                <span
-                                  className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded ${
-                                    item.stockStatus === "OUT_OF_STOCK"
-                                      ? "bg-red-500/20 text-red-400"
-                                      : "bg-yellow-500/20 text-yellow-400"
-                                  }`}
-                                >
-                                  {item.stockStatus.replace("_", " ")}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {item.stock} left
-                                </span>
-                              </nav>
-                            </section>
-                          </article>
-                        ))
-                    )}
-                  </nav>
-                </section>
-              </article>
-
-              {/* Right Column: Actions & Team */}
-              <aside className="space-y-10">
-                {/* Quick Actions */}
-                <section>
-                  <header className="flex items-center gap-2 mb-6 px-1">
-                    <Package size={16} className="text-purple-400" />
-                    <h2 className="text-xs font-black uppercase text-gray-500">
-                      Quick Actions
-                    </h2>
-                  </header>
-                  <QuickActions />
-                </section>
-              </aside>
+          {loadError && (
+            <section className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4">
+              <p className="text-sm font-medium text-red-200">{loadError}</p>
             </section>
+          )}
+
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              title="Total Students"
+              value={dashboardData?.membershipRatio.totalStudents ?? 0}
+              icon={Users}
+              isLoading={isLoading}
+              description="Students tracked in the organization roster"
+            />
+            <StatCard
+              title="Active Paid Members"
+              value={dashboardData?.membershipRatio.paidMembersCount ?? 0}
+              icon={LayoutDashboard}
+              isLoading={isLoading}
+              description={`${memberPercentage}% of all students`}
+            />
+            <StatCard
+              title="Inventory Alerts"
+              value={inventoryAlerts.length}
+              icon={AlertTriangle}
+              isLoading={isLoading}
+              description={
+                inventoryAlerts.length === 0
+                  ? "No low-stock or out-of-stock items"
+                  : "Products that need attention"
+              }
+            />
+            <StatCard
+              title="Upcoming Events"
+              value={upcomingEvents.length}
+              icon={Calendar}
+              isLoading={isLoading}
+              description={
+                nextEvent
+                  ? `Next: ${formatEventDate(nextEvent.eventDate)}`
+                  : "No scheduled events"
+              }
+            />
           </section>
-        </main>
-      </Layout>
+
+          <section className="grid gap-8 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.95fr)]">
+            <div className="space-y-8">
+              <section className={cardShell}>
+                <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Recent Activity
+                    </p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">
+                      Latest organization updates
+                    </h2>
+                  </div>
+                  <span className="inline-flex rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-xs font-medium text-purple-100">
+                    {activities.length} item{activities.length === 1 ? "" : "s"}
+                  </span>
+                </header>
+                <ActivityFeed activities={activities} isLoading={isLoading} />
+              </section>
+
+              <section className={cardShell}>
+                <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Inventory Alerts
+                    </p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">
+                      Stock that needs action
+                    </h2>
+                    <p className="mt-2 text-sm leading-6 text-white/65">
+                      Review low-stock and out-of-stock merchandise before it
+                      affects orders.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate("/admin/merch/products")}
+                    className="rounded-xl border border-white/10 bg-[#1a1635] px-4 py-3 text-sm font-semibold text-white/85 transition-colors hover:border-white/15 hover:bg-[#241d49] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#110e31]"
+                    type="button"
+                  >
+                    Manage Store
+                  </button>
+                </header>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {isLoading ? (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-28 animate-pulse rounded-2xl border border-white/10 bg-[#1a1635]"
+                      />
+                    ))
+                  ) : inventoryAlerts.length === 0 ? (
+                    <div className="col-span-full rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-10 text-center">
+                      <p className="text-sm font-medium text-emerald-200">
+                        All items are currently stocked and ready.
+                      </p>
+                    </div>
+                  ) : (
+                    inventoryAlerts.map((item) => (
+                      <article
+                        key={item.id}
+                        className="flex items-center gap-4 rounded-2xl border border-white/10 bg-[#1a1635] p-4"
+                      >
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-[#140f33] p-2">
+                          <img
+                            src={
+                              item.s3ImageKey
+                                ? `${S3_BASE_URL}${item.s3ImageKey}`
+                                : "/placeholder.png"
+                            }
+                            alt={item.name}
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-sm font-semibold text-white">
+                            {item.name}
+                          </h3>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                                item.stockStatus === "OUT_OF_STOCK"
+                                  ? "bg-red-500/15 text-red-200"
+                                  : "bg-amber-500/15 text-amber-200"
+                              }`}
+                            >
+                              {item.stockStatus.replaceAll("_", " ")}
+                            </span>
+                            <span className="text-sm text-white/55">
+                              {item.stock} left
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+
+            <aside className="space-y-8">
+              <section className={cardShell}>
+                <header className="mb-5 flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-200">
+                    <Package size={18} />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                      Quick Actions
+                    </p>
+                    <h2 className="mt-1 text-lg font-semibold text-white">
+                      Common shortcuts
+                    </h2>
+                  </div>
+                </header>
+                <QuickActions />
+              </section>
+
+              <section className={cardShell}>
+                <header className="mb-5">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/45">
+                    Upcoming Events
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold text-white">
+                    What&apos;s scheduled next
+                  </h2>
+                </header>
+
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-24 animate-pulse rounded-2xl border border-white/10 bg-[#1a1635]"
+                      />
+                    ))}
+                  </div>
+                ) : nextEvents.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-[#1a1635] px-5 py-10 text-center">
+                    <p className="text-sm font-medium text-white">
+                      No upcoming events
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-white/60">
+                      Scheduled events will appear here once they are added.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {nextEvents.map((event) => (
+                      <article
+                        key={event.eventId}
+                        className="rounded-2xl border border-white/10 bg-[#1a1635] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-semibold text-white">
+                              {event.eventName}
+                            </h3>
+                            <p className="mt-1 text-sm text-white/60">
+                              {event.eventLocation}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-purple-500/10 px-2.5 py-1 text-[11px] font-medium text-purple-100">
+                            {event.eventStatus.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm text-white/70">
+                          {formatEventDate(event.eventDate)}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </Layout>
   );
 };
 
