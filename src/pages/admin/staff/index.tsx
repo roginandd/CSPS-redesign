@@ -3,13 +3,19 @@ import Layout from "../../../components/Layout";
 import AuthenticatedNav from "../../../components/AuthenticatedNav";
 import StaffTable from "./components/StaffTable";
 import GrantAccessModal from "./components/GrantAccessModal";
-import { getAllAdmins, revokeAdminAccess } from "../../../api/admin";
+import {
+  getAllAdmins,
+  resetAdminPassword,
+  revokeAdminAccess,
+} from "../../../api/admin";
 import type { AdminResponseDTO } from "../../../api/admin";
+import { toast } from "sonner";
 
 const StaffPage = () => {
   const [admins, setAdmins] = useState<AdminResponseDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+  const [resettingAdminId, setResettingAdminId] = useState<number | null>(null);
 
   const fetchAdmins = async () => {
     setLoading(true);
@@ -37,11 +43,29 @@ const StaffPage = () => {
     }
     try {
       await revokeAdminAccess(adminId);
-      // Refresh list
+      toast.success("Admin access revoked successfully");
       fetchAdmins();
     } catch (err) {
       console.error("Failed to revoke access", err);
-      alert("Failed to revoke access.");
+      toast.error("Failed to revoke access.");
+    }
+  };
+
+  const handleResetDefaultPassword = async (admin: AdminResponseDTO) => {
+    try {
+      setResettingAdminId(admin.adminId);
+      const response = await resetAdminPassword(admin.adminId);
+      toast.success(response.message || "Admin password reset to default successfully");
+      await fetchAdmins();
+    } catch (err: any) {
+      toast.error(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          "Failed to reset admin password",
+      );
+      throw err;
+    } finally {
+      setResettingAdminId(null);
     }
   };
 
@@ -88,7 +112,12 @@ const StaffPage = () => {
               </div>
             </div>
           ) : (
-            <StaffTable admins={admins} onRevoke={handleRevoke} />
+            <StaffTable
+              admins={admins}
+              onRevoke={handleRevoke}
+              onResetDefaultPassword={handleResetDefaultPassword}
+              resettingAdminId={resettingAdminId}
+            />
           )}
         </div>
       </div>

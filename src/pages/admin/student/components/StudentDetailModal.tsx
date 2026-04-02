@@ -9,6 +9,7 @@ import {
   getStudentMembershipsByStudentId,
   createStudentMembership,
 } from "../../../../api/studentMembership";
+import { restoreDefaultPassword } from "../../../../api/student";
 import { AdminPosition } from "../../../../enums/AdminPosition";
 import CustomDropdown from "../../../../components/CustomDropdown";
 import {
@@ -57,6 +58,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPasswordRestoreModal, setShowPasswordRestoreModal] = useState(false);
+  const [isRestoringPassword, setIsRestoringPassword] = useState(false);
 
   // New membership form state — uses year range instead of academic year + semester
   const [selectedYearRange, setSelectedYearRange] = useState<string>(
@@ -143,6 +146,19 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     if (year === 2) return "nd";
     if (year === 3) return "rd";
     return "th";
+  };
+
+  const handleRestorePassword = async () => {
+    try {
+      setIsRestoringPassword(true);
+      await restoreDefaultPassword(student.studentId);
+      toast.success("Default password restored successfully");
+      setShowPasswordRestoreModal(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Failed to restore password");
+    } finally {
+      setIsRestoringPassword(false);
+    }
   };
 
   // Generate academic year range options for the dropdown
@@ -341,16 +357,58 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="px-10 py-8 border-t border-zinc-800 flex justify-end items-center">
+          <div className="px-10 py-8 border-t border-zinc-800 flex justify-between items-center">
+            <button
+              onClick={() => setShowPasswordRestoreModal(true)}
+              className="px-6 py-2.5 rounded-lg border border-red-500/30 text-red-400 text-sm font-medium hover:bg-red-500/10 transition-all"
+            >
+              Restore Default Password
+            </button>
             <button
               onClick={onClose}
-              className="px-8 py-2.5 rounded-lg bg-[#FDE006] text-black text-sm font-medium hover:bg-zinc-700 transition-all"
+              className="px-8 py-2.5 rounded-lg bg-[#FDE006] text-black text-sm font-medium hover:bg-[#edd205] transition-all"
             >
               Done
             </button>
           </div>
         </div>
       </div>
+
+      {showPasswordRestoreModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => !isRestoringPassword && setShowPasswordRestoreModal(false)}
+          />
+          <div className="bg-[#111116] w-full max-w-sm rounded-[24px] border border-white/10 p-6 relative z-10 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">Restore Password</h3>
+            <p className="text-white/60 mb-6 text-sm leading-relaxed">
+              Are you sure you want to restore the default password for <b>{student.user.firstName} {student.user.lastName}</b>? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPasswordRestoreModal(false)}
+                disabled={isRestoringPassword}
+                className="px-5 py-2 rounded-xl text-white/70 hover:text-white hover:bg-white/5 transition-colors font-medium text-sm disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRestorePassword}
+                disabled={isRestoringPassword}
+                className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm transition-colors shadow-lg shadow-red-500/20 disabled:opacity-50 flex items-center"
+              >
+                {isRestoringPassword ? (
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2" />
+                ) : null}
+                Confirm Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

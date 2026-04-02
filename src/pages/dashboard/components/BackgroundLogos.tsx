@@ -7,7 +7,7 @@ const BackgroundLogos = () => {
       <img
         src={BACKGROUNDCSSLOGO}
         alt=""
-        className="absolute top-0 left-[-5rem] sm:left-[-10rem] lg:left-0 opacity-40 w-[10rem] sm:w-[15rem] lg:w-[20rem]"
+        className="absolute top-0 left-[-5rem] s:lmeft-[-10rem] lg:left-0 opacity-40 w-[10rem] sm:w-[15rem] lg:w-[20rem]"
       />
 
       {/* Large Center Logo 

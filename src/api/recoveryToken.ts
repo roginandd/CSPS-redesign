@@ -7,7 +7,6 @@ const publicApi = axios.create({
 export interface RecoveryTokenResponse {
   recoveryTokenId: number;
   userAccountId: number;
-  token: string;
   createdAt: string;
   expiresAt: string;
   isUsed: boolean;

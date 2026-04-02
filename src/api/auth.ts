@@ -1,4 +1,4 @@
-import axios from "axios";
+
 import type { AuthRequest } from "../interfaces/auth/AuthRequest";
 import type { UserResponse } from "../interfaces/user/UserResponse";
 import { useAuthStore } from "../store/auth_store";
@@ -105,11 +105,10 @@ export const login = async (authRequest: AuthRequest) => {
   const response = await api.post("/auth/login", authRequest);
 
   try {
-    const { accessToken, refreshToken } = response.data.data;
+    const { accessToken } = response.data.data;
 
     // Store tokens in sessionStorage
     sessionStorage.setItem("accessToken", accessToken);
-    sessionStorage.setItem("refreshToken", refreshToken);
 
     // Decode JWT to extract role/position for immediate routing
     const claims = decodeJwtPayload(accessToken);
@@ -160,47 +159,14 @@ export const hydrateFullProfile = async (): Promise<AuthUser | undefined> => {
   }
 };
 
-export const refresh = async () => {
-  try {
-    const refreshToken = sessionStorage.getItem("refreshToken");
-
-    if (!refreshToken) {
-      throw new Error("No refresh token available");
-    }
-
-    // Use a separate axios instance to avoid interceptor loops
-    const refreshApi = axios.create({
-      baseURL: import.meta.env.VITE_API_URL,
-    });
-
-    const response = await refreshApi.post("/auth/refresh", {
-      refreshToken,
-    });
-
-    const { accessToken } = response.data.data;
-
-    // Update access token in sessionStorage
-    sessionStorage.setItem("accessToken", accessToken);
-
-    return response.data;
-  } catch (err) {
-    throw err;
-  }
-};
-
 export const logout = async () => {
   try {
     useAuthStore.getState().setLoggingOut(true);
 
-    const refreshToken = sessionStorage.getItem("refreshToken");
-
-    const response = await api.post("/auth/logout", {
-      refreshToken,
-    });
+    const response = await api.post("/auth/logout");
 
     // Clear tokens from sessionStorage
     sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("refreshToken");
 
     useAuthStore.getState().clearAuth();
     return response.data;

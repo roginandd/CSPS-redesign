@@ -32,3 +32,5 @@ C:\Users\Ginand\Desktop\CSPS-redesign\frontend\DESIGN_SYSTEM_PROMPT.md
 # Allow documentation files
 !docs/
 !docs/**/*.md
+# CocoIndex Code (ccc)
+/.cocoindex_code/
