@@ -1,11 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { OrderItemResponse } from "../../../../../interfaces/order/OrderResponse";
 import { S3_BASE_URL } from "../../../../../constant";
 import { OrderStatus } from "../../../../../enums/OrderStatus";
 import { MerchType } from "../../../../../enums/MerchType";
 import { FiX } from "react-icons/fi";
-import { statusStyles } from "./StatusCard";
+import { getAllowedTransitions, STATUS_LABELS, getStatusDisplay } from "../../../../../utils/statusConfig";
+import { updateOrderItemFreebies } from "../../../../../api/order";
+import { getFreebiePresets } from "../../../../../api/merch";
+import type { FreebiePreset } from "../../../../../interfaces/merch/FreebiePreset";
+import FreebieSelectionModal from "../../../../merch/productView/components/FreebieSelectionModal";
+import { toast } from "sonner";
 
 interface StatusCardModalProps {
   isOpen: boolean;
@@ -15,12 +20,6 @@ interface StatusCardModalProps {
   onStatusUpdate: (status: OrderStatus) => void;
   canEdit?: boolean;
 }
-
-const statusOptions = [
-  { value: OrderStatus.PENDING, label: "Processing" },
-  { value: OrderStatus.TO_BE_CLAIMED, label: "To Be Claimed" },
-  { value: OrderStatus.CLAIMED, label: "Claimed" },
-];
 
 const StatusCardModal: React.FC<StatusCardModalProps> = ({
   isOpen,
@@ -32,9 +31,50 @@ const StatusCardModal: React.FC<StatusCardModalProps> = ({
 }) => {
   const [tempStatus, setTempStatus] = useState<OrderStatus>(currentStatus);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdatingFreebies, setIsUpdatingFreebies] = useState(false);
+  const [showFreebieModal, setShowFreebieModal] = useState(false);
+  const [freebiePresets, setFreebiePresets] = useState<FreebiePreset[]>([]);
+  const [freebieSelection, setFreebieSelection] = useState<{ [freebieMerchId: number]: number }>({});
 
+  useEffect(() => {
+    if (isOpen && orderItem.merchType === MerchType.TICKET && orderItem.merchId) {
+      getFreebiePresets(orderItem.merchId).then(presets => {
+        setFreebiePresets(presets || []);
+      }).catch(() => {
+        // failed to fetch presets
+      });
+    }
+  }, [isOpen, orderItem.merchType, orderItem.merchId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFreebieSelection({});
+    }
+  }, [isOpen, orderItem.orderItemId]);
+
+  const handleUpdateFreebies = async () => {
+    if (!orderItem.orderItemId) return;
+    try {
+      setIsUpdatingFreebies(true);
+      await updateOrderItemFreebies(orderItem.orderItemId, Object.values(freebieSelection).map(id => ({ merchVariantItemId: id })));
+      toast.success("Freebies successfully updated!");
+      setShowFreebieModal(false);
+    } catch (err) {
+      toast.error("Failed to update freebies");
+    } finally {
+      setIsUpdatingFreebies(false);
+    }
+  };
   const isClothing = orderItem.merchType === MerchType.CLOTHING;
   const hasChanges = tempStatus !== currentStatus;
+
+  // get allowed transitions
+  const allowedStatuses = getAllowedTransitions(currentStatus);
+  
+  // define available status options based on allowed transitions
+  const statusOptions = [OrderStatus.PENDING, OrderStatus.TO_BE_CLAIMED, OrderStatus.CLAIMED]
+    .filter(status => allowedStatuses.includes(status) || status === currentStatus)
+    .map(status => ({ value: status, label: STATUS_LABELS[status] }));
 
   const handleSave = async () => {
     if (!hasChanges) return;
@@ -162,28 +202,58 @@ const StatusCardModal: React.FC<StatusCardModalProps> = ({
                   <p className="text-xs text-gray-500 mb-3">
                     {canEdit ? "SELECT STATUS" : "CURRENT STATUS"}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                    {statusOptions.map((option) => {
-                      const style = statusStyles[option.value];
-                      const isSelected = tempStatus === option.value;
+                  {statusOptions.length === 0 ? (
+                    <div className="px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-center text-gray-400 text-sm">
+                      This order is in a final state. No further transitions are allowed.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                      {statusOptions.map((option) => {
+                        const { className } = getStatusDisplay(option.value);
+                        const isSelected = tempStatus === option.value;
+                        const isAllowed = allowedStatuses.includes(option.value) || option.value === currentStatus;
 
-                      return (
-                        <button
-                          key={option.value}
-                          onClick={() => canEdit && setTempStatus(option.value)}
-                          disabled={!canEdit}
-                          className={`px-3 sm:px-4 py-3 sm:py-4 rounded-xl border transition-all text-xs sm:text-sm font-bold ${
-                            isSelected
-                              ? `${style.bg} ${style.border} ${style.color}`
-                              : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                        return (
+                          <button
+                            key={option.value}
+                            onClick={() => canEdit && isAllowed && setTempStatus(option.value)}
+                            disabled={!canEdit || !isAllowed}
+                            className={`px-3 sm:px-4 py-3 sm:py-4 rounded-xl border transition-all text-xs sm:text-sm font-bold ${
+                              isSelected
+                                ? className
+                                : !isAllowed
+                                ? "bg-white/5 border-white/10 text-gray-600 cursor-not-allowed"
+                                : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
+
+                {orderItem.merchType === MerchType.TICKET && freebiePresets.length > 0 && (
+                  <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-gray-500 uppercase tracking-wide">
+                        Freebies
+                      </p>
+                      <p className="text-sm text-white/70">
+                        Complete freebie details for legacy ticket orders.
+                      </p>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => setShowFreebieModal(true)}
+                          className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors"
+                        >
+                          Configure Freebies
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Footer */}
@@ -194,7 +264,7 @@ const StatusCardModal: React.FC<StatusCardModalProps> = ({
                 >
                   {canEdit ? "Cancel" : "Close"}
                 </button>
-                {canEdit && (
+                {canEdit && statusOptions.length > 0 && (
                   <button
                     onClick={handleSave}
                     disabled={!hasChanges || isSaving}
@@ -210,6 +280,28 @@ const StatusCardModal: React.FC<StatusCardModalProps> = ({
               </div>
             </div>
           </motion.div>
+
+          <FreebieSelectionModal
+            open={showFreebieModal}
+            onClose={() => setShowFreebieModal(false)}
+            presets={freebiePresets}
+            selection={freebieSelection}
+            onSelect={(freebieMerchId, merchVariantItemId) =>
+              setFreebieSelection((prev) => ({
+                ...prev,
+                [freebieMerchId]: merchVariantItemId,
+              }))
+            }
+            onConfirm={handleUpdateFreebies}
+          />
+
+          {isUpdatingFreebies && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+              <div className="rounded-xl border border-white/10 bg-[#171236] px-6 py-4 text-sm font-medium text-white/80">
+                Updating freebies...
+              </div>
+            </div>
+          )}
         </>
       )}
     </AnimatePresence>

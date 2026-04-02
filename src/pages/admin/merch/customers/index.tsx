@@ -25,6 +25,7 @@ import type { MerchCustomerResponse } from "../../../../interfaces/merch_custome
 import type { BulkPaymentEntry } from "../../../../interfaces/merch_customer/BulkMerchPaymentRequest";
 import type { PaginatedResponse } from "../../../../interfaces/paginated";
 import type { OrderStatus } from "../../../../enums/OrderStatus";
+import type { OrderItemFreebieResponse } from "../../../../interfaces/freebie/FreebieAssignment";
 import usePermissions from "../../../../hooks/usePermissions";
 import { S3_BASE_URL } from "../../../../constant";
 
@@ -64,6 +65,12 @@ const MerchCustomersPage = () => {
 
   // export state
   const [isExporting, setIsExporting] = useState(false);
+
+  // freebie assignment state
+  const [freebieAssignments, setFreebieAssignments] = useState<
+    Map<number, OrderItemFreebieResponse[]>
+  >(new Map());
+  const [freebieLoading, setFreebieLoading] = useState(false);
 
   // load merch list on mount
   useEffect(() => {
@@ -173,6 +180,35 @@ const MerchCustomersPage = () => {
     }
   }, [selectedMerchId, currentPage, selectedStatus, searchQuery]);
 
+  // fetch freebie assignments when table data changes and merch has freebie
+  useEffect(() => {
+    const hydrateFreebieAssignments = () => {
+      if (!selectedMerchDetail?.hasFreebie || !tableData?.content) {
+        setFreebieAssignments(new Map());
+        return;
+      }
+
+      setFreebieLoading(true);
+      const assignments = new Map<number, OrderItemFreebieResponse[]>();
+
+      tableData.content.forEach((customer) => {
+        if (!customer.orderItemId) {
+          return;
+        }
+
+        const normalizedAssignments = Array.isArray(customer.freebieAssignments)
+          ? customer.freebieAssignments
+          : [];
+        assignments.set(customer.orderItemId, normalizedAssignments);
+      });
+
+      setFreebieAssignments(assignments);
+      setFreebieLoading(false);
+    };
+
+    hydrateFreebieAssignments();
+  }, [tableData, selectedMerchDetail]);
+
   // reset page when filters change
   useEffect(() => {
     setCurrentPage(0);
@@ -206,6 +242,10 @@ const MerchCustomersPage = () => {
         const totalRes = await getMerchCustomerCount(selectedMerchId);
         setTotalCustomers(totalRes.count);
       }
+      // show success message
+      import("sonner").then(({ toast }) => {
+        toast.success("Orders created. Ready for students to claim.");
+      });
     } catch (err: any) {
       const message =
         err.response?.data?.message ||
@@ -429,6 +469,21 @@ const MerchCustomersPage = () => {
                   loading={tableLoading}
                   currentPage={currentPage}
                   onPageChange={setCurrentPage}
+                  merchDetail={selectedMerchDetail}
+                  canEditFreebies={canEditFinance}
+                  freebieAssignments={freebieAssignments}
+                  freebieLoading={freebieLoading}
+                  onRefresh={fetchCustomers}
+                  onFreebieUpdate={(orderItemId, updatedAssignment) => {
+                    setFreebieAssignments((prev) => {
+                      const next = new Map(prev);
+                      const normalizedAssignments = Array.isArray(updatedAssignment)
+                        ? updatedAssignment
+                        : [];
+                      next.set(orderItemId, normalizedAssignments);
+                      return next;
+                    });
+                  }}
                 />
               </div>
             )}

@@ -33,6 +33,8 @@ const StatusHeader = ({
     { label: "Ready for Pickup", value: OrderStatus.TO_BE_CLAIMED },
     { label: "Processing", value: OrderStatus.PENDING },
     { label: "Claimed", value: OrderStatus.CLAIMED },
+    { label: "Rejected", value: OrderStatus.REJECTED },
+    { label: "Cancelled", value: OrderStatus.CANCELLED },
   ];
 
   return (

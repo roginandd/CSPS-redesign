@@ -157,6 +157,10 @@ export default function OrderDetailModal({
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
+                      {(() => {
+                        const ticketFreebies = item.freebieAssignments || [];
+                        return (
+                          <>
                       <h3 className="text-lg font-semibold text-white mb-2">
                         {item.merchName}
                       </h3>
@@ -225,7 +229,48 @@ export default function OrderDetailModal({
                           <div>Created: {formatDate(item.createdAt)}</div>
                           <div>Updated: {formatDate(item.updatedAt)}</div>
                         </div>
+                        {item.merchType === "TICKET" && (
+                          <div className="md:col-span-2">
+                            <span className="text-zinc-500">Freebies:</span>
+                            {ticketFreebies.length > 0 ? (
+                              <div className="mt-2 space-y-2">
+                                {ticketFreebies.map((freebie) => (
+                                  <div
+                                    key={freebie.ticketFreebieConfigId}
+                                    className="rounded-lg border border-zinc-700 bg-zinc-950/40 px-3 py-2"
+                                  >
+                                    <p className="text-sm font-medium text-white">
+                                      {freebie.freebieName}
+                                    </p>
+                                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-300">
+                                      {freebie.category === "CLOTHING" ? (
+                                        <>
+                                          <span>
+                                            Size: {freebie.selectedSize || "Pending details"}
+                                          </span>
+                                          <span>
+                                            Color: {freebie.selectedColor || "Pending details"}
+                                          </span>
+                                        </>
+                                      ) : (
+                                        <span>
+                                          Design: {freebie.selectedDesign || "Pending details"}
+                                        </span>
+                                      )}
+                                      
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-zinc-400">No freebies</div>
+                            )}
+                          </div>
+                        )}
                       </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

@@ -7,36 +7,7 @@ import { OrderStatus } from "../../../../../enums/OrderStatus";
 import { MerchType } from "../../../../../enums/MerchType";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePermissions } from "../../../../../hooks/usePermissions";
-
-export const statusStyles = {
-  [OrderStatus.CLAIMED]: {
-    color: "text-green-500",
-    bg: "bg-green-500/10",
-    border: "border-green-500/20",
-  },
-  [OrderStatus.TO_BE_CLAIMED]: {
-    color: "text-amber-500",
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/20",
-  },
-  [OrderStatus.PENDING]: {
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
-  },
-  [OrderStatus.REJECTED]: {
-    color: "text-red-500",
-    bg: "bg-red-500/10",
-    border: "border-red-500/20",
-  },
-};
-
-export const statusLabels = {
-  [OrderStatus.CLAIMED]: "Claimed",
-  [OrderStatus.TO_BE_CLAIMED]: "To be Claimed",
-  [OrderStatus.PENDING]: "Processing",
-  [OrderStatus.REJECTED]: "Rejected",
-};
+import { getStatusDisplay } from "../../../../../utils/statusConfig";
 
 interface StatusCardProps {
   orderItem: OrderItemResponse;
@@ -63,8 +34,8 @@ const StatusCard: React.FC<StatusCardProps> = ({ orderItem }) => {
   };
 
   const isClothing = orderItem.merchType === MerchType.CLOTHING;
-  const statusStyle =
-    statusStyles[currentStatus] || statusStyles[OrderStatus.PENDING];
+  const ticketFreebies = orderItem.freebieAssignments || [];
+  const { label, className } = getStatusDisplay(currentStatus);
 
   return (
     <>
@@ -99,9 +70,9 @@ const StatusCard: React.FC<StatusCardProps> = ({ orderItem }) => {
 
               <div className="pt-2">
                 <span
-                  className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${statusStyle.bg} ${statusStyle.color} ${statusStyle.border}`}
+                  className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${className}`}
                 >
-                  {statusLabels[currentStatus] || currentStatus}
+                  {label}
                 </span>
               </div>
             </div>
@@ -150,6 +121,47 @@ const StatusCard: React.FC<StatusCardProps> = ({ orderItem }) => {
               <span className="font-bold text-white">#{orderItem.orderItemId}</span>
             </div>
           </div>
+
+          {orderItem.merchType === MerchType.TICKET && (
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                Freebies
+              </p>
+              {ticketFreebies.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  {ticketFreebies.map((freebie) => (
+                    <div
+                      key={freebie.ticketFreebieConfigId}
+                      className="rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                    >
+                      <p className="text-sm font-semibold text-white">
+                        {freebie.freebieName}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-300">
+                        {freebie.category === "CLOTHING" ? (
+                          <>
+                            <span>Size: {freebie.selectedSize || "Pending details"}</span>
+                            <span>Color: {freebie.selectedColor || "Pending details"}</span>
+                          </>
+                        ) : (
+                          <span>Design: {freebie.selectedDesign || "Pending details"}</span>
+                        )}
+                        <span>
+                          Status:{" "}
+                          {(freebie.fulfillmentStatus || "PENDING_DETAILS")
+                            .split("_")
+                            .map((word) => word.charAt(0) + word.slice(1).toLowerCase())
+                            .join(" ")}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-gray-400">No freebies</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

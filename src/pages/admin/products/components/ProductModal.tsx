@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { createMerch } from "../../../../api/merch";
+import {
+  createMerch,
+} from "../../../../api/merch";
 import { useMerchForm } from "../../../../hooks/useMerchForm";
 import MerchInfoStep from "./MerchInfoStep";
 import VariantStep from "./VariantStep";
@@ -8,7 +10,10 @@ import type {
   MerchInfoActions,
   VariantActions,
 } from "./productForm.types";
-import { validateMerchInfo, validateVariants } from "../util/validation";
+import {
+  validateMerchInfo,
+  validateVariants,
+} from "../util/validation";
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -44,6 +49,15 @@ const ProductModal: React.FC<ProductModalProps> = ({
     handleAddNonClothingVariant,
     handleNonClothingVariantChange,
     handleDeleteNonClothingVariant,
+    setHasFreebie,
+    addFreebieConfig,
+    removeFreebieConfig,
+    setFreebieCategory,
+    setFreebieName,
+    setClothingSubtype,
+    setFreebieSizes,
+    setFreebieColors,
+    setFreebieDesigns,
     resetForm,
   } = useMerchForm();
 
@@ -149,6 +163,15 @@ const ProductModal: React.FC<ProductModalProps> = ({
     setMerchType,
     setBasePrice,
     uploadMerchImage: handleMerchImageUpload,
+    setHasFreebie,
+    addFreebieConfig,
+    removeFreebieConfig,
+    setFreebieCategory,
+    setFreebieName,
+    setClothingSubtype,
+    setFreebieSizes,
+    setFreebieColors,
+    setFreebieDesigns,
     goToVariants: handleNextStep,
   };
 

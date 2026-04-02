@@ -14,6 +14,7 @@ import { getSalesStats, type SalesStats } from "../../../../api/sales";
 import { useNavigate } from "react-router-dom";
 import OrderDetailModal from "../../sales/components/OrderDetailModal";
 import MembershipListModal from "./components/MembershipListModal";
+import { getStatusDisplay } from "../../../../utils/statusConfig";
 
 // Loading Skeleton Component
 const LoadingSkeleton = ({ className }: { className?: string }) => (
@@ -29,6 +30,7 @@ const StatusBadge = ({
   variant?: "stock" | "order" | "membership" | "default";
 }) => {
   let colorClasses = "";
+  let displayStatus = status;
 
   if (variant === "stock") {
     switch (status) {
@@ -45,19 +47,12 @@ const StatusBadge = ({
       default:
         colorClasses = "bg-gray-500/20 text-gray-400 border-gray-500/30";
     }
+    displayStatus = status.replace(/_/g, " ");
   } else if (variant === "order") {
     const statusUpper = status.toUpperCase();
-    if (statusUpper === "PENDING") {
-      colorClasses = "bg-amber-500/20 text-amber-400 border-amber-500/30";
-    } else if (statusUpper === "TO_BE_CLAIMED") {
-      colorClasses = "bg-blue-500/20 text-blue-400 border-blue-500/30";
-    } else if (statusUpper === "CLAIMED") {
-      colorClasses = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-    } else if (statusUpper === "CANCELLED") {
-      colorClasses = "bg-red-500/20 text-red-400 border-red-500/30";
-    } else {
-      colorClasses = "bg-purple-500/20 text-purple-400 border-purple-500/30";
-    }
+    const { label, className } = getStatusDisplay(statusUpper);
+    colorClasses = className;
+    displayStatus = label;
   } else if (variant === "membership") {
     colorClasses =
       status === "Paid"
@@ -66,9 +61,6 @@ const StatusBadge = ({
   } else {
     colorClasses = "bg-gray-500/20 text-gray-400 border-gray-500/30";
   }
-
-  // Format status text for display (replace underscores with spaces)
-  const displayStatus = status.replace(/_/g, " ");
 
   return (
     <span

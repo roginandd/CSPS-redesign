@@ -42,10 +42,20 @@ const getStatusDisplay = (status: TransactionStatus) => {
         label: "Approved",
         className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/20",
       };
+    case "TO_BE_CLAIMED":
+      return {
+        label: "Ready to Claim",
+        className: "bg-amber-500/20 text-amber-400 border-amber-500/20",
+      };
     case "REJECTED":
       return {
         label: "Rejected",
         className: "bg-red-500/20 text-red-400 border-red-500/20",
+      };
+    case "CANCELLED":
+      return {
+        label: "Cancelled",
+        className: "bg-zinc-500/20 text-zinc-400 border-zinc-500/20",
       };
     case "PENDING":
     default:
@@ -220,7 +230,7 @@ const Index = () => {
       const params: TransactionParams = {
         page: currentPage,
         size: 5,
-        status: statusFilter || undefined,
+        status: statusFilter ? statusFilter.toUpperCase() : undefined,
         year: parseInt(yearFilter),
         ...searchParams,
       };
@@ -296,11 +306,11 @@ const Index = () => {
         setTransactions((prev) =>
           prev.map((t) =>
             t.id === confirmModal.id
-              ? { ...t, status: "CLAIMED" as TransactionStatus }
+              ? { ...t, status: "TO_BE_CLAIMED" as TransactionStatus }
               : t,
           ),
         );
-        toast.success("Transaction approved successfully!");
+        toast.success("Transaction approved. Order is ready to claim.");
         // Automatically print summary for the approved transaction
         if (updatedTransaction) {
           handlePrint(updatedTransaction);
@@ -320,9 +330,14 @@ const Index = () => {
       // Refetch to ensure pagination is correct after status change
       fetchTransactions();
     } catch (error: any) {
-      const errorMessage =
-        error?.response?.data?.message || "Failed to process transaction";
-      toast.error(errorMessage);
+      // handle specific error for already-approved transactions
+      if (error.message === "This transaction has already been approved") {
+        toast.error("This transaction has already been approved");
+      } else {
+        const errorMessage =
+          error?.response?.data?.message || "Failed to process transaction";
+        toast.error(errorMessage);
+      }
       console.error("Action failed:", error);
     } finally {
       setIsApproving(false);
@@ -559,8 +574,10 @@ const Index = () => {
                   >
                     <option value="">All Status</option>
                     <option value="PENDING">Pending</option>
+                    <option value="TO_BE_CLAIMED">Ready to Claim</option>
                     <option value="CLAIMED">Approved</option>
                     <option value="REJECTED">Rejected</option>
+                    <option value="CANCELLED">Cancelled</option>
                   </select>
                 </div>
 

@@ -3,7 +3,7 @@ import type { OrderResponse } from "../interfaces/order/OrderResponse";
 
 // ==================== Types ====================
 
-export type TransactionStatus = "PENDING" | "CLAIMED" | "REJECTED";
+export type TransactionStatus = "PENDING" | "TO_BE_CLAIMED" | "CLAIMED" | "REJECTED" | "CANCELLED";
 
 export interface ChartPoint {
   label: string;
@@ -55,7 +55,7 @@ export interface TransactionParams {
   page?: number;
   size?: number;
   search?: string;
-  status?: TransactionStatus;
+  status?: TransactionStatus | string;
   year?: number;
   studentId?: string;
   studentName?: string;
@@ -125,13 +125,22 @@ export const searchTransactions = async (
 };
 
 /**
- * Approve a pending transaction (changes status to CLAIMED)
+ * Approve a pending transaction (changes status to TO_BE_CLAIMED)
+ * @throws {Error} if transaction has already been approved (400 status)
  */
 export const approveTransaction = async (id: number): Promise<Transaction> => {
-  const response = await api.post<{ success: boolean; data: Transaction }>(
-    `/sales/transactions/${id}/approve`,
-  );
-  return response.data.data;
+  try {
+    const response = await api.post<{ success: boolean; data: Transaction }>(
+      `/sales/transactions/${id}/approve`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    // handle 400 error for already-approved transactions
+    if (error.response?.status === 400) {
+      throw new Error("This transaction has already been approved");
+    }
+    throw error;
+  }
 };
 
 /**

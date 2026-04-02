@@ -23,6 +23,7 @@ const STATUS_OPTIONS: { label: string; value: string }[] = [
   { label: "To Be Claimed", value: "TO_BE_CLAIMED" },
   { label: "Claimed", value: "CLAIMED" },
   { label: "Rejected", value: "REJECTED" },
+  { label: "Cancelled", value: "CANCELLED" },
 ];
 
 const CustomerFilterBar: React.FC<CustomerFilterBarProps> = ({

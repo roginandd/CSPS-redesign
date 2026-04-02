@@ -5,6 +5,10 @@ import type {
   NonClothingVariant,
 } from "../../../../hooks/useMerchForm";
 import type { ValidationErrors } from "../util/validation";
+import type {
+  ClothingSubtype,
+  FreebieCategory,
+} from "../../../../interfaces/freebie/FreebieConfig";
 
 export interface MerchInfoActions {
   setMerchName: (name: string) => void;
@@ -12,6 +16,15 @@ export interface MerchInfoActions {
   setMerchType: (type: MerchType | "") => void;
   setBasePrice: (price: string) => void;
   uploadMerchImage: (index: number, file: File) => void;
+  setHasFreebie: (value: boolean) => void;
+  addFreebieConfig: () => void;
+  removeFreebieConfig: (index: number) => void;
+  setFreebieCategory: (index: number, category: FreebieCategory) => void;
+  setFreebieName: (index: number, name: string) => void;
+  setClothingSubtype: (index: number, subtype: ClothingSubtype) => void;
+  setFreebieSizes: (index: number, sizes: string[]) => void;
+  setFreebieColors: (index: number, colors: string[]) => void;
+  setFreebieDesigns: (index: number, designs: string[]) => void;
   goToVariants: () => void;
 }
 

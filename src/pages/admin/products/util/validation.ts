@@ -1,8 +1,18 @@
-import type { MerchFormState } from "../../../../hooks/useMerchForm";
+import type { FreebieDraft, MerchFormState } from "../../../../hooks/useMerchForm";
 
 export interface ValidationErrors {
   [key: string]: string;
 }
+
+const hasDuplicateValues = (values?: string[]) => {
+  if (!values?.length) return false;
+
+  const normalized = values
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+
+  return new Set(normalized).size !== normalized.length;
+};
 
 export const validateMerchInfo = (
   formState: MerchFormState,
@@ -39,10 +49,108 @@ export const validateMerchInfo = (
     errors.description = "Description must not exceed 500 characters";
   }
 
+  if (formState.merchType === "TICKET" && formState.hasFreebie) {
+    if (formState.freebieConfigs.length === 0) {
+      errors.freebieConfigs = "Add at least one freebie.";
+    }
+
+    formState.freebieConfigs.forEach((config, index) => {
+      if (!config.freebieName.trim()) {
+        errors[`freebieConfigs.${index}.freebieName`] =
+          "Freebie name is required.";
+      }
+
+      if (config.category === "CLOTHING") {
+        if (!config.sizes?.length) {
+          errors[`freebieConfigs.${index}.sizes`] = "Select at least one size.";
+        } else if (hasDuplicateValues(config.sizes)) {
+          errors[`freebieConfigs.${index}.sizes`] =
+            "Duplicate sizes are not allowed.";
+        }
+
+        if (!config.colors?.length) {
+          errors[`freebieConfigs.${index}.colors`] =
+            "Select at least one color.";
+        } else if (hasDuplicateValues(config.colors)) {
+          errors[`freebieConfigs.${index}.colors`] =
+            "Duplicate colors are not allowed.";
+        }
+      } else if (!config.designs?.length) {
+        errors[`freebieConfigs.${index}.designs`] =
+          "Add at least one design or variant.";
+      } else if (hasDuplicateValues(config.designs)) {
+        errors[`freebieConfigs.${index}.designs`] =
+          "Duplicate designs are not allowed.";
+      }
+    });
+  }
+
+  // reject freebies on non-ticket merch
+  if (formState.merchType !== "TICKET" && formState.hasFreebie) {
+    errors.hasFreebie = "Freebies are only allowed for ticket merch.";
+  }
+
   return {
     isValid: Object.keys(errors).length === 0,
     errors,
   };
+};
+
+export const validateFreebieDraft = (
+  draft: FreebieDraft,
+): { isValid: boolean; message?: string } => {
+  if (!draft.merchName.trim()) {
+    return { isValid: false, message: "Freebie name is required" };
+  }
+
+  if (!draft.merchType) {
+    return { isValid: false, message: "Freebie type is required" };
+  }
+
+  if (draft.merchType !== "CLOTHING") {
+    if (!draft.basePrice || draft.basePrice <= 0) {
+      return { isValid: false, message: "Freebie base price is required" };
+    }
+  }
+
+  if (!draft.merchImageFile) {
+    return { isValid: false, message: "Freebie image is required" };
+  }
+
+  if (draft.merchType === "CLOTHING") {
+    if (draft.clothingVariants.length === 0) {
+      return { isValid: false, message: "Add at least one freebie variant" };
+    }
+    const hasValidVariant = draft.clothingVariants.every((variant) => {
+      const checkedSizes = variant.sizeStock.filter((item) => item.checked);
+      return (
+        variant.color.trim() &&
+        variant.imageFile &&
+        checkedSizes.length > 0 &&
+        checkedSizes.every((size) => size.stock !== "" && Number(size.stock) > 0)
+      );
+    });
+    return hasValidVariant
+      ? { isValid: true }
+      : { isValid: false, message: "Complete freebie size/color details" };
+  }
+
+  if (draft.nonClothingVariants.length === 0) {
+    return { isValid: false, message: "Add at least one freebie variant" };
+  }
+
+  const hasValidNonClothing = draft.nonClothingVariants.every((variant) => {
+    return (
+      variant.design.trim() &&
+      variant.imageFile &&
+      variant.stock !== "" &&
+      Number(variant.stock) > 0
+    );
+  });
+
+  return hasValidNonClothing
+    ? { isValid: true }
+    : { isValid: false, message: "Complete freebie design/stock details" };
 };
 
 export const validateVariants = (

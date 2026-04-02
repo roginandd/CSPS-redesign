@@ -132,3 +132,22 @@ export const completeStudentProfile = async (
     throw err;
   }
 };
+
+/**
+ * Restores a student's password to the default format.
+ * Access: ADMIN_EXECUTIVE
+ * Endpoint: PATCH /api/students/{studentId}/restore-default-password
+ */
+export const restoreDefaultPassword = async (
+  studentId: string,
+): Promise<{ status: string; message: string; data: string; timestamp: string }> => {
+  try {
+    const response = await api.patch(
+      `/students/${studentId}/restore-default-password`,
+    );
+    return response.data;
+  } catch (err) {
+    console.error("Error restoring default password:", err);
+    throw err;
+  }
+};

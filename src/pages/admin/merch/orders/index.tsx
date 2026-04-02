@@ -40,10 +40,23 @@ const Index = () => {
         setLoading(true);
         setError(null);
 
+        if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+          setError("Start date cannot be after end date.");
+          setLoading(false);
+          return;
+        }
+
+        const validStatusOptions = ["All", "PENDING", "TO_BE_CLAIMED", "CLAIMED", "REJECTED"];
+        if (selectedStatus && !validStatusOptions.includes(selectedStatus.toUpperCase()) && selectedStatus !== "All") {
+          setError("Invalid status filter selected.");
+          setLoading(false);
+          return;
+        }
+
         const params: OrderSearchParams = {
           page: currentPage,
           size: pageSize,
-          status: selectedStatus,
+          status: selectedStatus !== "All" ? selectedStatus.toUpperCase() : undefined,
           studentName: searchQuery, // Search acts as student name/ID filter
           startDate: startDate ? `${startDate}T00:00:00` : undefined,
           endDate: endDate ? `${endDate}T23:59:59` : undefined,
@@ -89,6 +102,7 @@ const Index = () => {
           orderId: item.orderId,
           studentName: item.studentName,
           orderDate: item.createdAt,
+          orderStatus: item.orderStatus,
           totalPrice: 0, // Recalculated below
           orderItems: [],
         };

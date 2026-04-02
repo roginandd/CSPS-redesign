@@ -4,6 +4,7 @@ import type { MerchVariantItemResponse } from "../../../../../interfaces/merch_v
 import type { BulkPaymentEntry } from "../../../../../interfaces/merch_customer/BulkMerchPaymentRequest";
 import { S3_BASE_URL } from "../../../../../constant";
 import ImageSelectDropdown from "../../../../../components/ImageSelectDropdown";
+import { MerchType } from "../../../../../enums/MerchType";
 
 /**
  * Modal for recording bulk payments with individual purchase dates.
@@ -69,6 +70,10 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
   const [csvError, setCsvError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
+
+  // check if the selected merch is membership type
+  const isMembershipMerch = merch?.merchType === MerchType.MEMBERSHIP;
 
   // Flatten all variant items into selectable SKU options
   const skuOptions: SkuOption[] = useMemo(() => {
@@ -304,6 +309,14 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
 
   const handleSubmitClick = () => {
     if (!canSubmit) return;
+    
+    // prevent submission of membership merch through bulk payment
+    if (isMembershipMerch) {
+      setMembershipError("Membership merch cannot be processed through bulk payment. Use the membership flow instead.");
+      return;
+    }
+    
+    setMembershipError(null);
     setShowConfirm(true);
   };
 
@@ -622,6 +635,16 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
 
         {/* Footer */}
         <div className="p-6 border-t border-zinc-800 space-y-4">
+          {/* Membership Error */}
+          {membershipError && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <p className="text-sm text-red-300">{membershipError}</p>
+            </div>
+          )}
+
           {/* Summary */}
           {validEntries.length > 0 && selectedSku && (
             <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 flex items-center justify-between">
@@ -649,8 +672,9 @@ const BulkPaymentModal: React.FC<BulkPaymentModalProps> = ({
             </button>
             <button
               onClick={handleSubmitClick}
-              disabled={!canSubmit}
+              disabled={!canSubmit || isMembershipMerch}
               className="flex-1 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isMembershipMerch ? "Membership merch cannot be processed through bulk payment" : undefined}
             >
               {submitting ? (
                 <span className="flex items-center justify-center gap-2">

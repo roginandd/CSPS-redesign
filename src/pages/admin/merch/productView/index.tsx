@@ -9,6 +9,7 @@ import {
   getMerchById,
   addVariantToMerch,
   deleteMerchVariant,
+  updateMerch,
 } from "../../../../api/merch";
 import { toast } from "sonner";
 import NotFoundPage from "../../../notFound";
@@ -26,6 +27,9 @@ import {
 import { ClothingSizing } from "../../../../enums/ClothingSizing";
 import { FaTrash } from "react-icons/fa";
 import { usePermissions } from "../../../../hooks/usePermissions";
+import TicketFreebieEditor from "./components/TicketFreebieEditor";
+import type { EditableFreebieConfig } from "../../../../hooks/useMerchForm";
+import { validateMerchInfo } from "../../products/util/validation";
 
 const AdminMerchProductView = () => {
   const { merchId } = useParams<{ merchId: string }>();
@@ -49,6 +53,15 @@ const AdminMerchProductView = () => {
   const [variantToDelete, setVariantToDelete] = useState<number | null>(null);
   const [isDeletingVariant, setIsDeletingVariant] = useState(false);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
+  const [ticketHasFreebies, setTicketHasFreebies] = useState(false);
+  const [ticketFreebieConfigs, setTicketFreebieConfigs] = useState<
+    EditableFreebieConfig[]
+  >([]);
+  const [freebieErrors, setFreebieErrors] = useState<Record<string, string>>({});
+  const [isSubmittingFreebies, setIsSubmittingFreebies] = useState(false);
+  const [pendingHasFreebieValue, setPendingHasFreebieValue] = useState<
+    boolean | null
+  >(null);
 
   // Edited stock state
   const [editedStocks, setEditedStocks] = useState<{
@@ -83,7 +96,21 @@ const AdminMerchProductView = () => {
         }
       }
     }
-    return false;
+
+    const normalizedMerchFreebies = JSON.stringify({
+      hasFreebie: merch.hasFreebie === true,
+      freebieConfigs: (merch.freebieConfigs || [])
+        .slice()
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    });
+    const normalizedEditedFreebies = JSON.stringify({
+      hasFreebie: ticketHasFreebies,
+      freebieConfigs: ticketFreebieConfigs
+        .slice()
+        .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)),
+    });
+
+    return normalizedMerchFreebies !== normalizedEditedFreebies;
   };
 
   // ========== Data Fetching ==========
@@ -109,6 +136,23 @@ const AdminMerchProductView = () => {
       setIsNotFound(false);
       setActiveIndex(0);
       initializeEditedData(response);
+      setTicketHasFreebies(response.hasFreebie === true);
+      setTicketFreebieConfigs(
+        (response.freebieConfigs || [])
+          .slice()
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+          .map((config, index) => ({
+            ...config,
+            displayOrder: config.displayOrder ?? index,
+            ...(config.category === "CLOTHING"
+              ? {
+                  sizes: config.sizes || [],
+                  colors: config.colors || [],
+                }
+              : { designs: config.designs || [] }),
+          })) as EditableFreebieConfig[],
+      );
+      setFreebieErrors({});
     } catch (err) {
       setIsNotFound(true);
     } finally {
@@ -251,6 +295,32 @@ const AdminMerchProductView = () => {
   };
 
   const handleSaveChanges = () => {
+    const freebieValidation = validateMerchInfo({
+      merchName: merch?.merchName || "",
+      description: merch?.description || "",
+      merchType: merch?.merchType || "",
+      basePrice: merch?.basePrice || 0,
+      merchImageFile: {} as File,
+      hasFreebie: ticketHasFreebies,
+      freebieConfigs: ticketFreebieConfigs,
+    } as any);
+
+    if (!freebieValidation.isValid) {
+      const freebieOnlyErrors = Object.fromEntries(
+        Object.entries(freebieValidation.errors).filter(([key]) =>
+          key.startsWith("freebieConfigs") || key === "hasFreebie",
+        ),
+      );
+
+      if (Object.keys(freebieOnlyErrors).length > 0) {
+        setFreebieErrors(freebieOnlyErrors);
+        toast.error("Please fix the freebie configuration before saving.");
+        return;
+      }
+    }
+
+    setFreebieErrors({});
+
     if (!hasChanges()) {
       toast.info("No changes to save");
       return;
@@ -258,10 +328,88 @@ const AdminMerchProductView = () => {
     setShowConfirmationModal(true);
   };
 
+  const validateFreebieConfigState = (
+    nextHasFreebie: boolean,
+    nextConfigs: EditableFreebieConfig[],
+  ) => {
+    const freebieValidation = validateMerchInfo({
+      merchName: merch?.merchName || "",
+      description: merch?.description || "",
+      merchType: merch?.merchType || "",
+      basePrice: merch?.basePrice || 0,
+      merchImageFile: {} as File,
+      hasFreebie: nextHasFreebie,
+      freebieConfigs: nextConfigs,
+    } as any);
+
+    return Object.fromEntries(
+      Object.entries(freebieValidation.errors).filter(([key]) =>
+        key.startsWith("freebieConfigs") || key === "hasFreebie",
+      ),
+    );
+  };
+
+  const handleRequestFreebieConfirm = (nextHasFreebie: boolean) => {
+    const errors = validateFreebieConfigState(nextHasFreebie, ticketFreebieConfigs);
+    if (Object.keys(errors).length > 0) {
+      setFreebieErrors(errors);
+      toast.error("Complete the freebie fields before confirming.");
+      return;
+    }
+
+    setFreebieErrors({});
+    setPendingHasFreebieValue(nextHasFreebie);
+  };
+
+  const handleConfirmFreebieUpdate = async () => {
+    if (pendingHasFreebieValue === null || !merchId || !merch) {
+      return;
+    }
+
+    setIsSubmittingFreebies(true);
+    try {
+      await updateMerch(
+        Number(merchId),
+        {
+          merchName: merch.merchName,
+          description: merch.description,
+          merchType: merch.merchType,
+          hasFreebie: pendingHasFreebieValue,
+          freebieConfigs: pendingHasFreebieValue ? ticketFreebieConfigs : [],
+        },
+        "patch",
+      );
+
+      setPendingHasFreebieValue(null);
+      await fetchMerch(Number(merchId));
+      toast.success("Freebie configuration updated.");
+    } catch (err: any) {
+      const errorMessage =
+        err?.response?.data?.message || "Failed to update freebies";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmittingFreebies(false);
+    }
+  };
+
   const handleConfirmSave = async () => {
     setIsSaving(true);
     setShowConfirmationModal(false);
     try {
+      if (merchId && merch) {
+        await updateMerch(
+          Number(merchId),
+          {
+            merchName: merch.merchName,
+            description: merch.description,
+            merchType: merch.merchType,
+            hasFreebie: ticketHasFreebies,
+            freebieConfigs: ticketFreebieConfigs,
+          },
+          "put",
+        );
+      }
+
       // Update stocks and prices via API
       const updatePromises: Promise<any>[] = [];
       const addPromises: Promise<any>[] = [];
@@ -464,9 +612,9 @@ const AdminMerchProductView = () => {
           </button>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-16">
+        <div className="grid gap-10 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)_minmax(0,28rem)] xl:items-start">
           {/* Left - Variant List */}
-          <div className="flex-1">
+          <div className="min-w-0">
             <div className="flex flex-col gap-4">
               <h2 className="text-xl font-bold text-white mb-4">Variants</h2>
               <div className="space-y-3 max-h-[600px] overflow-y-auto">
@@ -529,7 +677,8 @@ const AdminMerchProductView = () => {
           </div>
 
           {/* Center - Main Image */}
-          <div className="flex-[2] flex flex-col items-center justify-center">
+          <div className="min-w-0">
+            <div className="flex flex-col items-center justify-center">
             <img
               src={
                 currentVariant?.s3ImageKey
@@ -539,10 +688,11 @@ const AdminMerchProductView = () => {
               alt="Preview"
               className="w-full max-w-[350px] h-full max-h-[400px] object-contain drop-shadow-[0_35px_35px_rgba(0,0,0,0.5)]"
             />
+            </div>
           </div>
 
           {/* Right - Product Info & Stock Management */}
-          <div className="flex flex-col gap-6 flex-1">
+          <div className="flex min-w-0 flex-col gap-6">
             {/* Header */}
             <div>
               <h1 className="text-3xl font-bold tracking-widest">
@@ -569,6 +719,74 @@ const AdminMerchProductView = () => {
                 onDeleteItem={handleDeleteItem}
                 isClothing={merch.merchType === "CLOTHING"}
                 canEdit={canManageMerch}
+              />
+            )}
+
+            {merch.merchType === "TICKET" && canManageMerch && (
+              <TicketFreebieEditor
+                hasFreebie={ticketHasFreebies}
+                freebieConfigs={ticketFreebieConfigs}
+                errors={freebieErrors}
+                isSubmitting={isSubmittingFreebies}
+                onRequestConfirm={handleRequestFreebieConfirm}
+                onAddFreebie={() =>
+                  setTicketFreebieConfigs((prev) => [
+                    ...prev,
+                    {
+                      displayOrder: prev.length,
+                      category: "CLOTHING",
+                      freebieName: "",
+                      clothingSubtype: undefined,
+                      sizes: [],
+                      colors: [],
+                    },
+                  ])
+                }
+                onRemoveFreebie={(index) =>
+                  setTicketFreebieConfigs((prev) =>
+                    prev
+                      .filter((_, configIndex) => configIndex !== index)
+                      .map((config, configIndex) => ({
+                        ...config,
+                        displayOrder: configIndex,
+                      })),
+                  )
+                }
+                onUpdateFreebie={(index, patch) =>
+                  setTicketFreebieConfigs((prev) =>
+                    prev.map((config, configIndex) => {
+                      if (configIndex !== index) {
+                        return config;
+                      }
+
+                      if (patch.category && patch.category !== config.category) {
+                        return patch.category === "CLOTHING"
+                          ? {
+                              ticketFreebieConfigId: config.ticketFreebieConfigId,
+                              displayOrder: index,
+                              category: "CLOTHING",
+                              freebieName: patch.freebieName ?? config.freebieName,
+                              clothingSubtype: undefined,
+                              sizes: [],
+                              colors: [],
+                            }
+                          : {
+                              ticketFreebieConfigId: config.ticketFreebieConfigId,
+                              displayOrder: index,
+                              category: "NON_CLOTHING",
+                              freebieName: patch.freebieName ?? config.freebieName,
+                              designs: [],
+                            };
+                      }
+
+                      return {
+                        ...config,
+                        ...patch,
+                        displayOrder: index,
+                      } as EditableFreebieConfig;
+                    }),
+                  )
+                }
               />
             )}
 
@@ -637,6 +855,55 @@ const AdminMerchProductView = () => {
           message="Are you sure you want to delete this variant?"
           warningMessage="This will permanently delete the variant and all its items."
         />
+
+        {pendingHasFreebieValue !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#110e31] p-6">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/45">
+                Add Freebie
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-white">
+                Confirm freebie setup
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-white/60">
+                {pendingHasFreebieValue
+                  ? "This ticket will allow freebie configuration after confirmation."
+                  : "This will disable freebies for this ticket and clear the current freebie blocks."}
+              </p>
+
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPendingHasFreebieValue(null)}
+                  disabled={isSubmittingFreebies}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmFreebieUpdate}
+                  disabled={isSubmittingFreebies}
+                  className="rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmittingFreebies ? "Saving..." : "Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isSubmittingFreebies && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#110e31] p-6 text-center">
+              <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-purple-500/10 border-t-purple-500" />
+              <p className="text-lg font-semibold text-white">Adding freebie</p>
+              <p className="mt-2 text-sm text-white/60">
+                Saving the ticket freebie configuration.
+              </p>
+            </div>
+          </div>
+        )}
       </Layout>
   );
 };

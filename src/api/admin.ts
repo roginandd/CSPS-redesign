@@ -24,6 +24,13 @@ export interface AdminResponseDTO {
   user: UserResponseDTO;
 }
 
+export interface AdminApiResponse<T> {
+  status: string;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
 /**
  * Fetches all available admin positions that can be assigned.
  * DEVELOPER position can be assigned multiple times.
@@ -86,4 +93,18 @@ export const revokeAdminAccess = async (adminId: number): Promise<AdminResponseD
 export const getAllAdmins = async (): Promise<AdminResponseDTO[]> => {
   const response = await api.get<{ data: AdminResponseDTO[] }>("/admin/all");
   return response.data.data;
+};
+
+/**
+ * Resets a single admin account password back to its default value.
+ * Endpoint: POST /api/admin/{adminId}/reset-password
+ * @security Requires ADMIN_EXECUTIVE role
+ */
+export const resetAdminPassword = async (
+  adminId: number,
+): Promise<AdminApiResponse<AdminResponseDTO>> => {
+  const response = await api.post<AdminApiResponse<AdminResponseDTO>>(
+    `/admin/${adminId}/reset-password`,
+  );
+  return response.data;
 };

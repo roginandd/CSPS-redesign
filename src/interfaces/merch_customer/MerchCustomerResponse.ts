@@ -1,10 +1,12 @@
 import type { ClothingSizing } from "../../enums/ClothingSizing";
 import type { OrderStatus } from "../../enums/OrderStatus";
+import type { OrderItemFreebieResponse } from "../freebie/FreebieAssignment";
 
 /**
  * Represents a customer who purchased a specific merch.
  * Returned from GET /api/merch-customers/{merchId} endpoints.
  *
+ * @field orderItemId - unique order item ID for freebie assignment tracking
  * @field studentId - 8-character student ID
  * @field studentName - full name (first + last)
  * @field yearLevel - 1–4
@@ -19,6 +21,7 @@ import type { OrderStatus } from "../../enums/OrderStatus";
  * @field s3ImageKey - S3 key for the variant image
  */
 export interface MerchCustomerResponse {
+  orderItemId?: number;
   studentId: string;
   studentName: string;
   yearLevel: number;
@@ -31,4 +34,6 @@ export interface MerchCustomerResponse {
   orderStatus: OrderStatus;
   orderDate: string;
   s3ImageKey?: string | null;
+  hasFreebie?: boolean;
+  freebieAssignments?: OrderItemFreebieResponse[];
 }
