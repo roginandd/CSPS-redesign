@@ -1,11 +1,13 @@
 import type { MerchType } from "../../enums/MerchType";
 import type { OrderStatus } from "../../enums/OrderStatus";
+import type { FreebieAssignmentSummary } from "../freebie/FreebieAssignment";
 
 export interface OrderItemResponse {
   orderItemId: number;
   orderId: number;
   studentId: string;
   studentName: string;
+  merchId?: number;
   merchName: string;
   color?: string | null;
   design?: string | null;
@@ -17,6 +19,7 @@ export interface OrderItemResponse {
   orderStatus: OrderStatus;
   createdAt: string;
   updatedAt: string;
+  freebieAssignments?: FreebieAssignmentSummary[];
 }
 
 export interface OrderResponse {
@@ -25,6 +28,7 @@ export interface OrderResponse {
   totalPrice: number;
   orderDate: string;
   orderItems: OrderItemResponse[];
+  orderStatus: OrderStatus;
 }
 
 export interface PaginatedOrdersResponse {

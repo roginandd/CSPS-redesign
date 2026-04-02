@@ -2,6 +2,24 @@ import { useState, useCallback } from "react";
 import { ClothingSizing } from "../enums/ClothingSizing";
 import { MerchType } from "../enums/MerchType";
 import type { MerchRequest } from "../interfaces/merch/MerchRequest";
+import type {
+  FreebieConfigWithId,
+  ClothingSubtype,
+  FreebieCategory,
+} from "../interfaces/freebie/FreebieConfig";
+
+export interface FreebieDraft {
+  merchName: string;
+  description: string;
+  merchType: MerchType;
+  basePrice: number;
+  merchImagePreview: string;
+  merchImageFile: File | null;
+  imageThumbnails: string[];
+  thumbnailFiles: (File | null)[];
+  clothingVariants: ClothingVariant[];
+  nonClothingVariants: NonClothingVariant[];
+}
 
 export interface MerchFormState extends Omit<MerchRequest, "merchType"> {
   merchType: MerchType | "";
@@ -11,7 +29,33 @@ export interface MerchFormState extends Omit<MerchRequest, "merchType"> {
   thumbnailFiles: (File | null)[];
   clothingVariants: ClothingVariant[];
   nonClothingVariants: NonClothingVariant[];
+  hasFreebies: boolean;
+  freebieDrafts: FreebieDraft[];
+  hasFreebie?: boolean;
+  freebieConfigs: EditableFreebieConfig[];
 }
+
+export type EditableFreebieConfig =
+  | {
+      ticketFreebieConfigId?: number;
+      displayOrder: number;
+      category: "CLOTHING";
+      freebieName: string;
+      clothingSubtype?: ClothingSubtype;
+      sizes: string[];
+      colors: string[];
+      designs?: never;
+    }
+  | {
+      ticketFreebieConfigId?: number;
+      displayOrder: number;
+      category: "NON_CLOTHING";
+      freebieName: string;
+      clothingSubtype?: never;
+      sizes?: never;
+      colors?: never;
+      designs: string[];
+    };
 
 export interface ClothingVariant {
   color: string;
@@ -68,6 +112,10 @@ export const useMerchForm = () => {
     thumbnailFiles: [null, null, null, null],
     clothingVariants: [],
     nonClothingVariants: [],
+    hasFreebies: false,
+    freebieDrafts: [],
+    hasFreebie: false,
+    freebieConfigs: [],
   });
 
   // --- Merch Info Handlers ---
@@ -83,6 +131,10 @@ export const useMerchForm = () => {
     setFormState((prev) => ({
       ...prev,
       merchType: type,
+      hasFreebies: type === MerchType.TICKET ? prev.hasFreebies : false,
+      freebieDrafts: type === MerchType.TICKET ? prev.freebieDrafts : [],
+      hasFreebie: type === MerchType.TICKET ? prev.hasFreebie : false,
+      freebieConfigs: type === MerchType.TICKET ? prev.freebieConfigs : [],
     }));
   }, []);
 
@@ -309,7 +361,177 @@ export const useMerchForm = () => {
       thumbnailFiles: [null, null, null, null],
       clothingVariants: [],
       nonClothingVariants: [],
+      hasFreebies: false,
+      freebieDrafts: [],
+      hasFreebie: false,
+      freebieConfigs: [],
     });
+  }, []);
+
+  const setHasFreebies = useCallback((value: boolean) => {
+    setFormState((prev) => ({
+      ...prev,
+      hasFreebies: value,
+      freebieDrafts: value ? prev.freebieDrafts : [],
+    }));
+  }, []);
+
+  const addFreebieDraft = useCallback((draft: FreebieDraft) => {
+    setFormState((prev) => ({
+      ...prev,
+      freebieDrafts: [...prev.freebieDrafts, draft],
+    }));
+  }, []);
+
+  const updateFreebieDraft = useCallback((index: number, draft: FreebieDraft) => {
+    setFormState((prev) => ({
+      ...prev,
+      freebieDrafts: prev.freebieDrafts.map((item, idx) =>
+        idx === index ? draft : item,
+      ),
+    }));
+  }, []);
+
+  const removeFreebieDraft = useCallback((index: number) => {
+    setFormState((prev) => ({
+      ...prev,
+      freebieDrafts: prev.freebieDrafts.filter((_, idx) => idx !== index),
+    }));
+  }, []);
+
+  const setHasFreebie = useCallback((value: boolean) => {
+    setFormState((prev) => ({
+      ...prev,
+      hasFreebie: value,
+      freebieConfigs: value ? prev.freebieConfigs : [],
+    }));
+  }, []);
+
+  const addFreebieConfig = useCallback(() => {
+    setFormState((prev) => ({
+      ...prev,
+      freebieConfigs: [
+        ...prev.freebieConfigs,
+        {
+          displayOrder: prev.freebieConfigs.length,
+          category: "CLOTHING",
+          freebieName: "",
+          clothingSubtype: undefined,
+          sizes: [],
+          colors: [],
+        },
+      ],
+    }));
+  }, []);
+
+  const removeFreebieConfig = useCallback((index: number) => {
+    setFormState((prev) => ({
+      ...prev,
+      freebieConfigs: prev.freebieConfigs
+        .filter((_, configIndex) => configIndex !== index)
+        .map((config, configIndex) => ({
+          ...config,
+          displayOrder: configIndex,
+        })),
+    }));
+  }, []);
+
+  const updateFreebieConfig = useCallback(
+    (
+      index: number,
+      patch: Partial<EditableFreebieConfig> & {
+        category?: FreebieCategory;
+      },
+    ) => {
+      setFormState((prev) => ({
+        ...prev,
+        freebieConfigs: prev.freebieConfigs.map((config, configIndex) => {
+          if (configIndex !== index) {
+            return config;
+          }
+
+          if (patch.category && patch.category !== config.category) {
+            if (patch.category === "CLOTHING") {
+              return {
+                ticketFreebieConfigId: config.ticketFreebieConfigId,
+                displayOrder: config.displayOrder,
+                category: "CLOTHING",
+                freebieName: patch.freebieName ?? config.freebieName,
+                clothingSubtype: undefined,
+                sizes: [],
+                colors: [],
+              };
+            }
+
+            return {
+              ticketFreebieConfigId: config.ticketFreebieConfigId,
+              displayOrder: config.displayOrder,
+              category: "NON_CLOTHING",
+              freebieName: patch.freebieName ?? config.freebieName,
+              designs: [],
+            };
+          }
+
+          return { ...config, ...patch } as EditableFreebieConfig;
+        }),
+      }));
+    },
+    [],
+  );
+
+  const hydrateFreebieConfigs = useCallback(
+    (configs: FreebieConfigWithId[]) => {
+      setFormState((prev) => ({
+        ...prev,
+        hasFreebie: configs.length > 0,
+        freebieConfigs: configs
+          .slice()
+          .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
+          .map((config, index) => ({
+            ...config,
+            displayOrder: config.displayOrder ?? index,
+            ...(config.category === "CLOTHING"
+              ? {
+                  sizes: config.sizes || [],
+                  colors: config.colors || [],
+                }
+              : {
+                  designs: config.designs || [],
+                }),
+          })) as EditableFreebieConfig[],
+      }));
+    },
+    [],
+  );
+
+  const setFreebieName = useCallback((index: number, name: string) => {
+    updateFreebieConfig(index, { freebieName: name });
+  }, [updateFreebieConfig]);
+
+  const setFreebieCategory = useCallback(
+    (index: number, category: FreebieCategory) => {
+      updateFreebieConfig(index, { category });
+    },
+    [updateFreebieConfig],
+  );
+
+  const setClothingSubtype = useCallback(
+    (index: number, subtype: ClothingSubtype) => {
+      updateFreebieConfig(index, { clothingSubtype: subtype });
+    },
+    [updateFreebieConfig],
+  );
+
+  const setFreebieSizes = useCallback((index: number, sizes: string[]) => {
+    updateFreebieConfig(index, { sizes });
+  }, [updateFreebieConfig]);
+
+  const setFreebieColors = useCallback((index: number, colors: string[]) => {
+    updateFreebieConfig(index, { colors });
+  }, [updateFreebieConfig]);
+
+  const setFreebieDesigns = useCallback((index: number, designs: string[]) => {
+    updateFreebieConfig(index, { designs });
   }, []);
 
   const getMerchRequest = useCallback((): MerchRequest => {
@@ -334,6 +556,20 @@ export const useMerchForm = () => {
     handleAddNonClothingVariant,
     handleNonClothingVariantChange,
     handleDeleteNonClothingVariant,
+    setHasFreebies,
+    addFreebieDraft,
+    updateFreebieDraft,
+    removeFreebieDraft,
     resetForm,
+    setHasFreebie,
+    addFreebieConfig,
+    removeFreebieConfig,
+    hydrateFreebieConfigs,
+    setFreebieCategory,
+    setFreebieName,
+    setClothingSubtype,
+    setFreebieSizes,
+    setFreebieColors,
+    setFreebieDesigns,
   };
 };

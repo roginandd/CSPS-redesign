@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import type { OrderPostRequest } from "../../../../interfaces/order/OrderRequest";
 
 interface ConfirmOrderModalProps {
   open: boolean;
   onClose: () => void;
   /** action to perform the order; modal will await this */
-  onConfirmAction: (orderRequest: OrderPostRequest) => Promise<void>;
-  orderRequest: OrderPostRequest;
+  onConfirmAction: () => Promise<void>;
   totalAmount?: number;
   itemsCount?: number;
 }
@@ -15,7 +13,6 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
   open,
   onClose,
   onConfirmAction,
-  orderRequest,
   totalAmount = 0,
   itemsCount = 0,
 }) => {
@@ -28,7 +25,7 @@ const ConfirmOrderModal: React.FC<ConfirmOrderModalProps> = ({
     try {
       setIsProcessing(true);
       setError(null);
-      await onConfirmAction(orderRequest);
+      await onConfirmAction();
       onClose();
     } catch (err: any) {
       setError(err?.message || "Failed to confirm order");

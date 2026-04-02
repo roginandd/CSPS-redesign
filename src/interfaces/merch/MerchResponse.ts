@@ -1,5 +1,6 @@
 import type { MerchType } from "../../enums/MerchType";
 import type { MerchVariantResponse } from "../merch_variant/MerchVariantResponse";
+import type { FreebieConfigWithId } from "../freebie/FreebieConfig";
 
 /**
  * Detailed merchandise response with all variants and items.
@@ -13,6 +14,10 @@ export interface MerchDetailedResponse {
   basePrice: number;
   s3ImageKey: string;
   variants: MerchVariantResponse[];
+  hasFreebie?: boolean;
+  freebieConfigs?: FreebieConfigWithId[];
+  purchaseBlocked?: boolean;
+  purchaseBlockMessage?: string | null;
 }
 
 /**

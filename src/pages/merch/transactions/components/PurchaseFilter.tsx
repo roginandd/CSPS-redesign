@@ -7,6 +7,7 @@ const statusLabels: Record<string, string> = {
   [OrderStatus.TO_BE_CLAIMED]: "To be claimed",
   [OrderStatus.PENDING]: "Pending",
   [OrderStatus.REJECTED]: "Rejected",
+  [OrderStatus.CANCELLED]: "Cancelled",
 };
 
 interface PurchaseFilterProps {

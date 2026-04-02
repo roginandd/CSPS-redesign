@@ -22,6 +22,7 @@ export interface OrderSearchParams extends PaginationParams {
   startDate?: string;
   endDate?: string;
   sort?: string;
+  year?: number;
 }
 
 /**
@@ -147,6 +148,22 @@ export const deleteOrder = async (orderId: number): Promise<void> => {
   }
 };
 
+/**
+ * Cancel an order (Student only).
+ * Endpoint: PATCH /api/orders/{orderId}/cancel
+ */
+export const cancelOrder = async (orderId: number): Promise<OrderResponse> => {
+  try {
+    const response = await api.patch<{ data: OrderResponse }>(
+      `${ORDERS}/${orderId}/cancel`
+    );
+    return response.data.data;
+  } catch (err) {
+    console.error(`Error cancelling order ${orderId}:`, err);
+    throw err;
+  }
+};
+
 /* OrderItem APIs */
 
 /**
@@ -168,6 +185,7 @@ export const createOrderItem = async (
 /**
  * Get order item by id.
  * Endpoint: GET /api/order-items/{id}
+ * @throws {Error} with message "You don't have permission to view this order" for 403/404 responses
  */
 export const getOrderItemById = async (
   id: number,
@@ -178,7 +196,11 @@ export const getOrderItemById = async (
     );
 
     return response.data.data;
-  } catch (err) {
+  } catch (err: any) {
+    // handle ownership errors for students
+    if (err.response?.status === 403 || err.response?.status === 404) {
+      throw new Error("You don't have permission to view this order");
+    }
     console.error(`Error fetching order item ${id}:`, err);
     throw err;
   }
@@ -231,6 +253,7 @@ export const getOrderItemByStatus = async (
 /**
  * Update order item status.
  * Endpoint: PATCH /api/order-items/{id}/status?status={STATUS}
+ * @throws {Error} if transition is invalid (400 status)
  */
 export const updateOrderItemStatus = async (
   id: number,
@@ -243,9 +266,28 @@ export const updateOrderItemStatus = async (
       { params: { status } },
     );
     return response.data;
-  } catch (err) {
+  } catch (err: any) {
+    // handle 400 error for invalid status transitions
+    if (err.response?.status === 400) {
+      throw new Error("Invalid status transition. Please follow the correct order lifecycle.");
+    }
     console.error(`Error updating status for order item ${id}:`, err);
     throw err;
+  }
+};
+
+export const updateOrderItemFreebies = async (
+  orderItemId: number,
+  freebies: { merchVariantItemId: number }[],
+): Promise<any> => {
+  try {
+    const response = await api.put(`${ORDER_ITEMS}/${orderItemId}/freebies`, {
+      freebies,
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating freebies for order item ${orderItemId}:`, error);
+    throw error;
   }
 };
 
@@ -320,6 +362,7 @@ export default {
   getMyOrders,
   getOrders,
   deleteOrder,
+  cancelOrder,
   createOrderItem,
   getOrderItemById,
   getOrderItemByStatus,

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import SAMPLE from "../../../../assets/image 8.png";
-import { FaCheck } from "react-icons/fa";
+import { FaCheck, FaMinus, FaPlus } from "react-icons/fa";
 import { FiTrash2 } from "react-icons/fi";
 import type { CartItemResponse } from "../../../../interfaces/cart/CartItemResponse";
 import { MerchType } from "../../../../enums/MerchType";
@@ -11,6 +11,8 @@ export type ProductCardProps = {
   isSelected: boolean;
   onToggle: () => void;
   onRemove: (merchVariantItemId: number) => void;
+  onQuantityChange?: (delta: number) => void;
+  onEditFreebie?: () => void;
 };
 
 /**
@@ -20,10 +22,25 @@ export type ProductCardProps = {
  * @param isSelected - Whether this item is currently selected for checkout
  * @param onToggle   - Callback to toggle the selection state
  * @param onRemove   - Callback to optimistically remove the item from the cart
+ * @param onQuantityChange - Callback to increment or decrement item quantity
  */
 const ProductCard = memo(
-  ({ cartItem, isSelected, onToggle, onRemove }: ProductCardProps) => {
+  ({
+    cartItem,
+    isSelected,
+    onToggle,
+    onRemove,
+    onQuantityChange,
+    onEditFreebie,
+  }: ProductCardProps) => {
     const isClothing = cartItem.merchType === MerchType.CLOTHING;
+    const hasFixedQuantity =
+      cartItem.merchType === MerchType.TICKET ||
+      cartItem.merchType === MerchType.MEMBERSHIP;
+    const ticketFreebies = cartItem.freebieAssignments || [];
+    const shouldShowFreebieSection =
+      cartItem.merchType === MerchType.TICKET &&
+      (ticketFreebies.length > 0 || cartItem.hasFreebie);
 
     return (
       <div className="flex items-center gap-6 group relative">
@@ -86,11 +103,39 @@ const ProductCard = memo(
                   {cartItem.merchName}
                 </h3>
 
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                  <p className="text-xs font-medium text-white/40 uppercase mb-1">
-                    Qty:{" "}
-                    <span className="text-white/80">{cartItem.quantity}</span>
-                  </p>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 items-center">
+                  <div className="flex items-center gap-2 mr-2">
+                    <p className="text-xs font-medium text-white/40 uppercase">Qty:</p>
+                    {hasFixedQuantity ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-white/90">
+                        1
+                      </div>
+                    ) : (
+                      <div className="flex items-center bg-white/5 rounded-lg overflow-hidden border border-white/10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuantityChange?.(-1);
+                          }}
+                          className="px-2.5 py-1.5 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                          <FaMinus className="w-2.5 h-2.5" />
+                        </button>
+                        <span className="text-sm font-semibold text-white/90 w-6 text-center select-none">
+                          {cartItem.quantity}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuantityChange?.(1);
+                          }}
+                          className="px-2.5 py-1.5 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                        >
+                          <FaPlus className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {isClothing ? (
                     <>
                       <p className="text-xs font-medium text-white/40 uppercase mb-1">
@@ -113,6 +158,53 @@ const ProductCard = memo(
                     </p>
                   )}
                 </div>
+
+                {shouldShowFreebieSection && (
+                    <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-white/40">
+                          Freebies
+                        </p>
+                        {onEditFreebie && (
+                          <button
+                            type="button"
+                            onClick={onEditFreebie}
+                            className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                      {ticketFreebies.length > 0 ? (
+                        <div className="mt-2 space-y-2">
+                          {ticketFreebies.map((freebie) => (
+                            <div
+                              key={freebie.ticketFreebieConfigId}
+                              className="rounded-lg border border-white/10 bg-[#171236] px-3 py-2"
+                            >
+                              <p className="text-sm font-semibold text-white/90">
+                                {freebie.freebieName}
+                              </p>
+                              {freebie.category === "CLOTHING" ? (
+                                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/70">
+                                  <span>Size: {freebie.selectedSize || "Pending details"}</span>
+                                  <span>Color: {freebie.selectedColor || "Pending details"}</span>
+                                </div>
+                              ) : (
+                                <p className="mt-1 text-xs text-white/70">
+                                  Design: {freebie.selectedDesign || "Pending details"}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-white/60">
+                          Included freebies are attached to this ticket. Open Edit to review or update them.
+                        </p>
+                      )}
+                    </div>
+                  )}
               </div>
 
               {/* Individual Unit Price */}

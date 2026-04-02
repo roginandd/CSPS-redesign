@@ -14,8 +14,14 @@ import type {
   NonClothingVariantRequestDTO,
 } from "../interfaces/dto/VariantRequestDTO";
 import api from "./api";
+import type {
+  FreebiePreset,
+  FreebiePresetUpdateRequest,
+} from "../interfaces/merch/FreebiePreset";
 import type { MerchVariantRequest } from "../interfaces/merch_variant/MerchVariantRequest";
 import type { MerchVariantResponse } from "../interfaces/merch_variant/MerchVariantResponse";
+import type { FreebieConfig } from "../interfaces/freebie/FreebieConfig";
+import type { EditableFreebieConfig } from "../hooks/useMerchForm";
 
 /**
  * Get all merchandise summaries without variant details.
@@ -82,6 +88,40 @@ export const getAllMerch = async (): Promise<MerchDetailedResponse[]> => {
   }
 };
 
+const buildTicketFreebieConfigs = (
+  formState: MerchFormState,
+): FreebieConfig[] => {
+  if (formState.merchType !== MerchType.TICKET || !formState.hasFreebie) {
+    return [];
+  }
+
+  return formState.freebieConfigs.map((config, index) => {
+    if (config.category === "CLOTHING") {
+      return {
+        ...(config.ticketFreebieConfigId
+          ? { ticketFreebieConfigId: config.ticketFreebieConfigId }
+          : {}),
+        displayOrder: config.displayOrder ?? index,
+        category: "CLOTHING" as const,
+        freebieName: config.freebieName.trim(),
+        clothingSubtype: config.clothingSubtype,
+        sizes: config.sizes || [],
+        colors: config.colors || [],
+      };
+    }
+
+    return {
+      ...(config.ticketFreebieConfigId
+        ? { ticketFreebieConfigId: config.ticketFreebieConfigId }
+        : {}),
+      displayOrder: config.displayOrder ?? index,
+      category: "NON_CLOTHING" as const,
+      freebieName: config.freebieName.trim(),
+      designs: config.designs || [],
+    };
+  });
+};
+
 export const createMerch = async (
   formState: MerchFormState,
 ): Promise<{ success: boolean; data?: any; error?: string }> => {
@@ -93,6 +133,13 @@ export const createMerch = async (
     formData.append("description", formState.description);
     formData.append("merchType", formState.merchType as string);
     formData.append("basePrice", formState.basePrice.toString());
+
+    // Add inline freebie config for TICKET merch
+    const freebieConfigs = buildTicketFreebieConfigs(formState);
+    if (formState.merchType === MerchType.TICKET) {
+      formData.append("hasFreebie", formState.hasFreebie ? "true" : "false");
+      formData.append("freebieConfigs", JSON.stringify(freebieConfigs));
+    }
 
     // Add main merch image
     if (formState.merchImageFile) {
@@ -284,6 +331,100 @@ export const revertMerch = async (merchId: number): Promise<void> => {
     await api.put(`/merch/${merchId}/revert`);
   } catch (err) {
     console.error(`Error reverting merch ${merchId}:`, err);
+    throw err;
+  }
+};
+
+/**
+ * Get freebie presets for a ticket merchandise.
+ * Endpoint: GET /api/merch/{ticketMerchId}/freebie-presets
+ */
+export const getFreebiePresets = async (
+  ticketMerchId: number,
+): Promise<FreebiePreset[]> => {
+  try {
+    const response = await api.get(`/merch/${ticketMerchId}/freebie-presets`);
+    // Assuming backend returns { message, data: [...] } or directly the array
+    return response.data?.data || response.data || [];
+  } catch (err) {
+    console.error(`Error fetching freebies for ${ticketMerchId}:`, err);
+    throw err;
+  }
+};
+
+export const updateMerch = async (
+  merchId: number,
+  formState: Pick<
+    MerchFormState,
+    | "merchName"
+    | "description"
+    | "merchType"
+    | "hasFreebie"
+    | "freebieConfigs"
+  >,
+  method: "put" | "patch" = "put",
+): Promise<MerchDetailedResponse> => {
+  try {
+    const freebieConfigs = buildTicketFreebieConfigs(
+      formState as MerchFormState,
+    );
+    const payload = {
+      merchName: formState.merchName,
+      description: formState.description,
+      merchType: formState.merchType,
+      hasFreebie:
+        formState.merchType === MerchType.TICKET ? !!formState.hasFreebie : false,
+      freebieConfigs:
+        formState.merchType === MerchType.TICKET ? freebieConfigs : [],
+    };
+
+    const response = await api[method](`/merch/${merchId}`, payload);
+    return response.data;
+  } catch (err) {
+    console.error(`Error updating merch ${merchId}:`, err);
+    throw err;
+  }
+};
+
+export const getMerchVariantItemFreebies = async (
+  merchVariantItemId: number,
+): Promise<EditableFreebieConfig[]> => {
+  try {
+    const response = await api.get(
+      `/merch-variant-item/${merchVariantItemId}/freebies`,
+    );
+
+    return (response.data?.data ?? response.data ?? []).map(
+      (config: EditableFreebieConfig, index: number) => ({
+        ...config,
+        displayOrder: config.displayOrder ?? index,
+      }),
+    );
+  } catch (err) {
+    console.error(
+      `Error fetching freebies for merch variant item ${merchVariantItemId}:`,
+      err,
+    );
+    throw err;
+  }
+};
+
+/**
+ * Update freebie presets for a ticket merchandise.
+ * Endpoint: PUT /api/merch/{ticketMerchId}/freebie-presets
+ */
+export const updateFreebiePresets = async (
+  ticketMerchId: number,
+  payload: FreebiePresetUpdateRequest,
+): Promise<any> => {
+  try {
+    const response = await api.put(
+      `/merch/${ticketMerchId}/freebie-presets`,
+      payload,
+    );
+    return response.data;
+  } catch (err) {
+    console.error(`Error updating freebies for ${ticketMerchId}:`, err);
     throw err;
   }
 };

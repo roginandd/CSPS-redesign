@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AuthenticatedNav from "../../../components/AuthenticatedNav";
 import { BiSolidCartAdd } from "react-icons/bi";
 import Layout from "../../../components/Layout";
@@ -6,7 +6,7 @@ import DesktopCarousel from "./components/DesktopCarousel";
 import MobileCarousel from "./components/MobileCarousel";
 import { useParams, useNavigate } from "react-router-dom";
 import type { MerchDetailedResponse } from "../../../interfaces/merch/MerchResponse";
-import { getMerchById } from "../../../api/merch";
+import { getMerchById, getMerchVariantItemFreebies } from "../../../api/merch";
 import { ClothingSizing } from "../../../enums/ClothingSizing";
 import { MerchType } from "../../../enums/MerchType";
 import type { CartItemRequest } from "../../../interfaces/cart/CartItemRequest";
@@ -16,27 +16,84 @@ import BuyNowModal from "./components/BuyNowModal";
 import { toast } from "sonner";
 import NotFoundPage from "../../notFound";
 import { S3_BASE_URL } from "../../../constant";
+import type { FreebieSelection } from "../../../interfaces/freebie/FreebieAssignment";
+import type { EditableFreebieConfig } from "../../../hooks/useMerchForm";
+
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "XXXXL"];
+
+const sortSizes = (sizes: string[]) =>
+  [...sizes].sort((a, b) => {
+    const aIndex = SIZE_ORDER.indexOf(a.toUpperCase());
+    const bIndex = SIZE_ORDER.indexOf(b.toUpperCase());
+
+    if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+
+const FreebieOptionGroup = ({
+  label,
+  options,
+  value,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  value?: string | null;
+  onSelect: (value: string) => void;
+}) => (
+  <div className="space-y-3">
+    <div className="flex items-end justify-between gap-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-white/40">
+        {label}
+      </p>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      {options.map((option) => {
+        const isActive = value === option;
+
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onSelect(option)}
+            className={`rounded-xl border-2 px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
+              isActive
+                ? "border-purple-500 bg-white/10 text-white"
+                : "border-white/5 bg-transparent text-white/40 hover:border-white/20 hover:text-white"
+            }`}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
 
 const Index = () => {
   const { merchId } = useParams<{ merchId: string }>();
   const navigate = useNavigate();
 
-  // Data state
   const [merch, setMerch] = useState<MerchDetailedResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [isNotFound, setIsNotFound] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
   const [processingBuy, setProcessingBuy] = useState(false);
-
-  // Selection state
+  const [loadingFreebies, setLoadingFreebies] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState<ClothingSizing | null>(null);
   const [quantity, setQuantity] = useState(1);
-
-  // Modal state
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const [variantFreebies, setVariantFreebies] = useState<EditableFreebieConfig[]>(
+    [],
+  );
+  const [freebieSelections, setFreebieSelections] = useState<
+    Record<number, FreebieSelection>
+  >({});
 
-  // Computed values
   const currentVariant = merch?.variants[activeIndex];
   const availableSizes = currentVariant?.items || [];
   const design = currentVariant?.design || "";
@@ -56,14 +113,50 @@ const Index = () => {
     selectedSizeItem?.merchVariantItemId ||
     selectedDesignItem?.merchVariantItemId ||
     null;
+  const isTicket = merch?.merchType === MerchType.TICKET;
+  const hasTicketFreebie =
+    isTicket && merch?.hasFreebie === true && (merch.freebieConfigs?.length || 0) > 0;
+  const isPurchaseBlocked = merch?.purchaseBlocked === true;
+  const purchaseBlockMessage =
+    merch?.purchaseBlockMessage || "Item is already in the cart / order";
+  const hasFixedQuantity =
+    merch?.merchType === MerchType.TICKET ||
+    merch?.merchType === MerchType.MEMBERSHIP;
+
+  const hasCompleteTicketFreebieSelection = useMemo(
+    () =>
+      variantFreebies.every((freebie) => {
+        const selection = freebieSelections[freebie.ticketFreebieConfigId ?? -1];
+        return freebie.category === "CLOTHING"
+          ? !!selection?.selectedSize && !!selection?.selectedColor
+          : !!selection?.selectedDesign;
+      }),
+    [freebieSelections, variantFreebies],
+  );
 
   const isValidForPurchase =
-    merch?.merchType === "CLOTHING"
+    (merch?.merchType === "CLOTHING"
       ? !!selectedSize && !!currentVariant
-      : !!currentVariant;
+      : !!currentVariant) &&
+    hasCompleteTicketFreebieSelection;
   const merchVariantIds = merch?.variants.map((v) => v.merchVariantId) || [];
 
-  // ========== Data Fetching ==========
+  const buildFreebieSelections = (): FreebieSelection[] =>
+    variantFreebies.map((freebie) => {
+      const selection = freebieSelections[freebie.ticketFreebieConfigId!];
+
+      return freebie.category === "CLOTHING"
+        ? {
+            ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+            selectedSize: selection?.selectedSize || "",
+            selectedColor: selection?.selectedColor || "",
+          }
+        : {
+            ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+            selectedDesign: selection?.selectedDesign || "",
+          };
+    });
+
   const fetchMerch = async (id: number) => {
     setLoading(true);
     try {
@@ -79,7 +172,7 @@ const Index = () => {
       });
       setMerch(response);
       setIsNotFound(false);
-    } catch (err) {
+    } catch {
       setIsNotFound(true);
     } finally {
       setLoading(false);
@@ -87,12 +180,68 @@ const Index = () => {
   };
 
   useEffect(() => {
-    if (merchId) fetchMerch(Number(merchId));
+    if (merchId) {
+      fetchMerch(Number(merchId));
+    }
   }, [merchId]);
+
   useEffect(() => {
     setSelectedSize(null);
     setQuantity(1);
   }, [activeIndex, merchId]);
+
+  useEffect(() => {
+    setVariantFreebies([]);
+    setFreebieSelections({});
+  }, [merchId]);
+
+  useEffect(() => {
+    const loadVariantFreebies = async () => {
+      if (!hasTicketFreebie || !selectedMerchVariantItemId) {
+        setVariantFreebies([]);
+        setFreebieSelections({});
+        return;
+      }
+
+      try {
+        setLoadingFreebies(true);
+        const freebies = await getMerchVariantItemFreebies(selectedMerchVariantItemId);
+        setVariantFreebies(freebies);
+        setFreebieSelections(
+          freebies.reduce<Record<number, FreebieSelection>>((acc, freebie) => {
+            if (!freebie.ticketFreebieConfigId) {
+              return acc;
+            }
+
+            acc[freebie.ticketFreebieConfigId] =
+              freebie.category === "CLOTHING"
+                ? {
+                    ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+                    selectedSize: "",
+                    selectedColor: "",
+                  }
+                : {
+                    ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+                    selectedDesign: "",
+                  };
+            return acc;
+          }, {}),
+        );
+      } catch (err: any) {
+        const message =
+          err?.response?.data?.message ||
+          err.message ||
+          "We couldn't load the freebies for this ticket.";
+        setVariantFreebies([]);
+        setFreebieSelections({});
+        toast.error(message);
+      } finally {
+        setLoadingFreebies(false);
+      }
+    };
+
+    loadVariantFreebies();
+  }, [hasTicketFreebie, selectedMerchVariantItemId]);
 
   const handleDecrement = () => setQuantity((prev) => Math.max(1, prev - 1));
   const handleIncrement = () =>
@@ -100,20 +249,30 @@ const Index = () => {
 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-    if (!isNaN(val)) setQuantity(Math.min(Math.max(1, val), currentStock));
+    if (!isNaN(val)) {
+      setQuantity(Math.min(Math.max(1, val), currentStock));
+    }
   };
 
   const handleAddToCart = async (
     cartItem: CartItemRequest,
   ): Promise<CartItemResponse | null> => {
-    if (!cartItem) return null;
     setAddingToCart(true);
     try {
       const response = await addCartItem(cartItem);
-      toast.success("Added to cart! 🛒");
+      if (merchId) {
+        await fetchMerch(Number(merchId));
+      }
+      toast.success(
+        merch?.merchType === MerchType.TICKET
+          ? "Ticket added to cart. You can update its freebies from the cart."
+          : "Item added to cart.",
+      );
       return response;
     } catch (err: any) {
-      toast.error(err.message || "Something went wrong");
+      const errorMessage =
+        err?.response?.data?.message || err.message || "Something went wrong";
+      toast.error(errorMessage);
       return null;
     } finally {
       setAddingToCart(false);
@@ -121,29 +280,47 @@ const Index = () => {
   };
 
   const handleBuyNow = () => {
+    if (isPurchaseBlocked) {
+      toast.error(purchaseBlockMessage);
+      return;
+    }
+
     if (!isValidForPurchase) {
-      toast.error(
-        merch?.merchType === "CLOTHING"
-          ? "Please select a size"
-          : "Please select a variant",
-      );
+      if (!hasCompleteTicketFreebieSelection) {
+        toast.error("Complete all ticket freebie selections before continuing.");
+      } else {
+        toast.error(
+          merch?.merchType === "CLOTHING"
+            ? "Please select a size"
+            : "Please select a variant",
+        );
+      }
       return;
     }
     setShowBuyModal(true);
   };
 
   const handleConfirmBuy = async () => {
-    if (!selectedMerchVariantItemId) return;
+    if (!selectedMerchVariantItemId) {
+      return;
+    }
+
+    if (isPurchaseBlocked) {
+      toast.error(purchaseBlockMessage);
+      return;
+    }
+
     setProcessingBuy(true);
     try {
-      await handleAddToCart({
+      const requestPayload: CartItemRequest = {
         merchVariantItemId: selectedMerchVariantItemId,
-        quantity,
-      });
+        quantity: hasFixedQuantity ? 1 : quantity,
+        ...(hasTicketFreebie ? { freebieSelections: buildFreebieSelections() } : {}),
+      };
+
+      await handleAddToCart(requestPayload);
       setShowBuyModal(false);
       navigate("/merch/cart", { state: { selectedMerchVariantItemId } });
-    } catch (err) {
-      // Handle error silently
     } finally {
       setProcessingBuy(false);
     }
@@ -152,8 +329,9 @@ const Index = () => {
   const getSlidePosition = (index: number) => {
     let diff = index - activeIndex;
     const len = merchVariantIds.length;
-    if (len > 0)
+    if (len > 0) {
       diff = ((((diff + len / 2) % len) + len) % len) - Math.floor(len / 2);
+    }
     return {
       translateY: diff * 120,
       scale: Math.max(0, 1.1 - Math.abs(diff) * 0.15),
@@ -162,18 +340,19 @@ const Index = () => {
     };
   };
 
-  if (isNotFound) return <NotFoundPage />;
+  if (isNotFound) {
+    return <NotFoundPage />;
+  }
 
   return (
     <Layout>
       <AuthenticatedNav />
 
-      <div className="max-w-[90rem] mx-auto px-6 py-10 lg:py-16">
-        <div className="flex flex-col lg:flex-row gap-12 xl:gap-20 items-start">
-          {/* Left: Desktop Variant Selector */}
-          <div className="hidden lg:block shrink-0">
+      <div className="mx-auto max-w-[90rem] px-6 py-10 lg:py-16">
+        <div className="flex flex-col items-start gap-12 lg:flex-row xl:gap-20">
+          <div className="hidden shrink-0 lg:block">
             {loading ? (
-              <div className="w-[180px] h-[500px] bg-[#242050]/50 border border-white/10 rounded-[2rem] animate-pulse" />
+              <div className="h-[500px] w-[180px] rounded-[2rem] border border-white/10 bg-[#242050]/50 animate-pulse" />
             ) : (
               <DesktopCarousel
                 items={merchVariantIds}
@@ -185,31 +364,25 @@ const Index = () => {
             )}
           </div>
 
-          {/* Center: Main Product Showcase */}
-          <div className="flex-[1.5] w-full group">
+          <div className="group w-full flex-[1.5]">
             {loading ? (
-              <div className="aspect-square bg-[#242050]/50 border border-white/10 rounded-[2rem] animate-pulse flex items-center justify-center">
-                <div className="w-20 h-20 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
-              </div>
+              <div className="aspect-square rounded-[2rem] border border-white/10 bg-[#242050]/50 animate-pulse" />
             ) : (
-              <div className="aspect-square flex items-center justify-center p-12 overflow-hidden relative transition-all duration-500 hover:border-purple-500/30">
-                {/* Internal Glow Effect */}
-                <div className="absolute inset-0 via-transparent to-transparent opacity-50" />
+              <div className="relative aspect-square overflow-hidden p-12 transition-all duration-500 hover:border-purple-500/30">
                 <img
                   src={
                     currentVariant?.s3ImageKey &&
                     S3_BASE_URL + currentVariant.s3ImageKey
                   }
                   alt="Product Preview"
-                  className="w-full h-full object-contain relative z-10 transition-transform duration-700 ease-out group-hover:scale-110"
+                  className="relative z-10 h-full w-full object-contain transition-transform duration-700 ease-out group-hover:scale-110"
                 />
               </div>
             )}
 
-            {/* Mobile Variant Selector */}
-            <div className="lg:hidden mt-8">
+            <div className="mt-8 lg:hidden">
               {loading ? (
-                <div className="h-20 bg-[#242050]/50 border border-white/10 rounded-[2rem] animate-pulse" />
+                <div className="h-20 rounded-[2rem] border border-white/10 bg-[#242050]/50 animate-pulse" />
               ) : (
                 <MobileCarousel
                   merchVariants={merch?.variants || []}
@@ -221,64 +394,18 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Right: Interaction & Details */}
-          <div className="flex-1 w-full flex flex-col gap-8">
+          <div className="flex w-full flex-1 flex-col gap-8">
             {loading ? (
-              <>
-                {/* Skeleton Header */}
-                <div className="space-y-3">
-                  <div className="h-6 w-48 bg-white/10 rounded-full animate-pulse" />
-                  <div className="h-12 w-80 bg-white/10 rounded-lg animate-pulse" />
-                  <div className="flex items-center gap-4">
-                    <div className="h-8 w-24 bg-white/10 rounded animate-pulse" />
-                    <div className="h-6 w-20 bg-green-500/20 rounded animate-pulse" />
-                  </div>
-                </div>
-
-                <div className="h-[1px] bg-white/5 w-full" />
-
-                {/* Skeleton Controls */}
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-                    <div className="flex gap-2">
-                      <div className="h-10 w-20 bg-white/5 rounded-xl animate-pulse" />
-                      <div className="h-10 w-20 bg-white/5 rounded-xl animate-pulse" />
-                      <div className="h-10 w-20 bg-white/5 rounded-xl animate-pulse" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="h-4 w-16 bg-white/10 rounded animate-pulse" />
-                    <div className="grid grid-cols-5 gap-2">
-                      {[...Array(5)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="h-11 bg-white/5 rounded-xl animate-pulse"
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="h-4 w-16 bg-white/10 rounded animate-pulse" />
-                    <div className="h-14 w-32 bg-white/5 rounded-2xl animate-pulse" />
-                  </div>
-                </div>
-
-                {/* Skeleton CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <div className="flex-[2] h-14 bg-yellow-400/50 rounded-2xl animate-pulse" />
-                  <div className="flex-1 h-14 bg-white/5 rounded-2xl animate-pulse" />
-                </div>
-              </>
+              <div className="space-y-8">
+                <div className="h-12 w-80 rounded-lg bg-white/10 animate-pulse" />
+              </div>
             ) : (
               <>
                 <header className="space-y-3">
-                  <div className="inline-flex px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-bold text-white/50 uppercase">
+                  <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase text-white/50">
                     CSPS Official • {merch?.merchType}
                   </div>
-                  <h1 className="text-4xl xl:text-5xl font-bold text-white ">
+                  <h1 className="text-4xl font-bold text-white xl:text-5xl">
                     {merch?.merchName}
                   </h1>
                   <div className="flex items-center gap-4">
@@ -286,33 +413,147 @@ const Index = () => {
                       ₱{currentPrice.toFixed(2)}
                     </p>
                     <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded border ${currentStock > 0 ? "border-green-500/20 text-green-400 bg-green-500/5" : "border-red-500/20 text-red-400 bg-red-500/5"}`}
+                      className={`rounded border px-2 py-0.5 text-xs font-bold ${
+                        currentStock > 0
+                          ? "border-green-500/20 bg-green-500/5 text-green-400"
+                          : "border-red-500/20 bg-red-500/5 text-red-400"
+                      }`}
                     >
-                      {currentStock > 0
-                        ? `${currentStock} IN STOCK`
-                        : "OUT OF STOCK"}
+                      {currentStock > 0 ? `${currentStock} IN STOCK` : "OUT OF STOCK"}
                     </span>
                   </div>
                 </header>
 
-                <div className="h-[1px] bg-white/5 w-full" />
+                <div className="h-[1px] w-full bg-white/5" />
 
-                {/* Selection Controls */}
                 <div className="space-y-8">
-                  {/* Variant Style Selection */}
+                  {isPurchaseBlocked && (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-200">
+                      {purchaseBlockMessage}
+                    </div>
+                  )}
+
+                  {hasTicketFreebie && (
+                    <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-white/40">
+                            Select Freebies
+                          </p>
+                          <p className="mt-1 text-xs text-white/50">
+                            Choose one option for each included freebie before purchase.
+                          </p>
+                        </div>
+                       
+                      </div>
+
+                      {loadingFreebies ? (
+                        <div className="space-y-3">
+                          <div className="h-24 w-full rounded-2xl bg-white/5 animate-pulse" />
+                          <div className="h-24 w-full rounded-2xl bg-white/5 animate-pulse" />
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {variantFreebies.map((freebie) => {
+                            const selection =
+                              freebieSelections[freebie.ticketFreebieConfigId!];
+
+                            return (
+                              <div
+                                key={freebie.ticketFreebieConfigId}
+                                className="space-y-5 rounded-2xl border border-white/10 bg-white/5 p-5"
+                              >
+                                <div>
+                                  <p className="text-sm font-semibold text-white">
+                                    {freebie.freebieName}
+                                  </p>
+                                </div>
+
+                                {freebie.category === "CLOTHING" ? (
+                                  <div className="space-y-5">
+                                    <FreebieOptionGroup
+                                      label="Size"
+                                      options={sortSizes(freebie.sizes || [])}
+                                      value={selection?.selectedSize}
+                                      onSelect={(selectedValue) =>
+                                        setFreebieSelections((prev) => ({
+                                          ...prev,
+                                          [freebie.ticketFreebieConfigId!]: {
+                                            ticketFreebieConfigId:
+                                              freebie.ticketFreebieConfigId,
+                                            selectedSize: selectedValue,
+                                            selectedColor:
+                                              prev[freebie.ticketFreebieConfigId!]
+                                                ?.selectedColor || "",
+                                          },
+                                        }))
+                                      }
+                                    />
+                                    <FreebieOptionGroup
+                                      label="Color"
+                                      options={freebie.colors || []}
+                                      value={selection?.selectedColor}
+                                      onSelect={(selectedValue) =>
+                                        setFreebieSelections((prev) => ({
+                                          ...prev,
+                                          [freebie.ticketFreebieConfigId!]: {
+                                            ticketFreebieConfigId:
+                                              freebie.ticketFreebieConfigId,
+                                            selectedSize:
+                                              prev[freebie.ticketFreebieConfigId!]
+                                                ?.selectedSize || "",
+                                            selectedColor: selectedValue,
+                                          },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                ) : (
+                                  <FreebieOptionGroup
+                                    label="Design"
+                                    options={freebie.designs || []}
+                                    value={selection?.selectedDesign}
+                                    onSelect={(selectedValue) =>
+                                      setFreebieSelections((prev) => ({
+                                        ...prev,
+                                        [freebie.ticketFreebieConfigId!]: {
+                                          ticketFreebieConfigId:
+                                            freebie.ticketFreebieConfigId,
+                                          selectedDesign: selectedValue,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {isTicket && merch?.hasFreebie === false && (
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm text-white/60">
+                      No freebie included
+                    </div>
+                  )}
+
                   <div className="space-y-4">
-                    <p className="text-[10px] font-bold text-white/40 uppercase]">
-                      Select Style
-                    </p>
+                      <p className="text-[10px] font-bold uppercase text-white/40">
+                       {merch?.merchType === "TICKET" || merch?.merchType === "MEMBERSHIP"
+                       ? "Select" : "Select Style"}
+                      </p>
+                   
                     <div className="flex flex-wrap gap-2">
                       {merch?.variants.map((variant, idx) => (
                         <button
                           key={variant.merchVariantId}
                           onClick={() => setActiveIndex(idx)}
-                          className={`px-5 py-2.5 rounded-xl border-2 transition-all duration-300 text-sm font-semibold ${
+                          className={`rounded-xl border-2 px-5 py-2.5 text-sm font-semibold transition-all duration-300 ${
                             activeIndex === idx
-                              ? "bg-white/10 border-purple-500 text-white shadow-lg shadow-purple-500/20"
-                              : "bg-transparent border-white/5 text-white/40 hover:border-white/20 hover:text-white"
+                              ? "border-purple-500 bg-white/10 text-white"
+                              : "border-white/5 bg-transparent text-white/40 hover:border-white/20 hover:text-white"
                           }`}
                         >
                           {variant.color || variant.design}
@@ -321,13 +562,12 @@ const Index = () => {
                     </div>
                   </div>
 
-                  {/* Size Selection */}
                   {merch?.merchType === "CLOTHING" && (
                     <div className="space-y-4">
-                      <p className="text-[10px] font-bold text-white/40 uppercase ">
+                      <p className="text-[10px] font-bold uppercase text-white/40">
                         Choose Size
                       </p>
-                      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
                         {availableSizes.map((sizeItem) => {
                           const isActive = selectedSize === sizeItem.size;
                           const isOutOfStock = sizeItem.stockQuantity === 0;
@@ -338,12 +578,12 @@ const Index = () => {
                               onClick={() =>
                                 setSelectedSize(sizeItem.size as ClothingSizing)
                               }
-                              className={`h-11 rounded-xl border-2 transition-all font-bold text-sm ${
+                              className={`h-11 rounded-xl border-2 text-sm font-bold transition-all ${
                                 isActive
-                                  ? "bg-white text-black border-white shadow-xl"
+                                  ? "border-purple-500 bg-white/10 text-white"
                                   : isOutOfStock
-                                    ? "opacity-20 cursor-not-allowed border-white/5 line-through"
-                                    : "bg-white/5 border-white/5 text-white hover:border-purple-400"
+                                    ? "cursor-not-allowed border-white/5 opacity-20 line-through"
+                                    : "border-white/5 bg-white/5 text-white hover:border-white/20"
                               }`}
                             >
                               {sizeItem.size}
@@ -354,16 +594,15 @@ const Index = () => {
                     </div>
                   )}
 
-                  {/* Quantity Selector - Only for MEMBERSHIP */}
-                  {merch?.merchType !== MerchType.MEMBERSHIP && (
+                  {!hasFixedQuantity && (
                     <div className="space-y-4">
-                      <p className="text-[10px] font-bold text-white/40 uppercase">
+                      <p className="text-[10px] font-bold uppercase text-white/40">
                         Quantity
                       </p>
-                      <div className="flex items-center gap-6 bg-white/5 border border-white/10 w-fit rounded-2xl p-1.5">
+                      <div className="flex w-fit items-center gap-6 rounded-2xl border border-white/10 bg-white/5 p-1.5">
                         <button
                           onClick={handleDecrement}
-                          className="w-10 h-10 flex items-center justify-center text-xl text-white/40 hover:text-white transition-colors"
+                          className="flex h-10 w-10 items-center justify-center text-xl text-white/40 transition-colors hover:text-white"
                         >
                           -
                         </button>
@@ -371,11 +610,11 @@ const Index = () => {
                           type="text"
                           value={quantity}
                           onChange={handleQuantityChange}
-                          className="w-8 text-center bg-transparent border-none outline-none font-bold text-lg"
+                          className="w-8 border-none bg-transparent text-center text-lg font-bold outline-none"
                         />
                         <button
                           onClick={handleIncrement}
-                          className="w-10 h-10 flex items-center justify-center text-xl text-white/40 hover:text-white transition-colors"
+                          className="flex h-10 w-10 items-center justify-center text-xl text-white/40 transition-colors hover:text-white"
                         >
                           +
                         </button>
@@ -384,28 +623,50 @@ const Index = () => {
                   )}
                 </div>
 
-                {/* CTA Group */}
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <div className="flex flex-col gap-4 pt-4 sm:flex-row">
                   <button
                     onClick={handleBuyNow}
                     disabled={
-                      !isValidForPurchase || currentStock === 0 || processingBuy
+                      isPurchaseBlocked ||
+                      !isValidForPurchase ||
+                      currentStock === 0 ||
+                      processingBuy ||
+                      loadingFreebies
                     }
-                    className="flex-[2] bg-[#FDE006] text-black font-bold py-5 rounded-2xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale"
+                    className="flex-[2] rounded-2xl bg-[#FDE006] py-5 font-bold text-black transition-all hover:brightness-110 active:scale-[0.98] disabled:grayscale disabled:opacity-30"
                   >
                     {processingBuy ? "Processing..." : "Buy Now"}
                   </button>
                   <button
-                    onClick={() =>
+                    onClick={() => {
+                      if (isPurchaseBlocked) {
+                        toast.error(purchaseBlockMessage);
+                        return;
+                      }
+
+                      if (!hasCompleteTicketFreebieSelection) {
+                        toast.error(
+                          "Complete all ticket freebie selections before adding this item.",
+                        );
+                        return;
+                      }
+
                       handleAddToCart({
                         merchVariantItemId: selectedMerchVariantItemId!,
-                        quantity,
-                      })
-                    }
+                        quantity: hasFixedQuantity ? 1 : quantity,
+                        ...(hasTicketFreebie
+                          ? { freebieSelections: buildFreebieSelections() }
+                          : {}),
+                      });
+                    }}
                     disabled={
-                      addingToCart || !isValidForPurchase || currentStock === 0
+                      isPurchaseBlocked ||
+                      addingToCart ||
+                      !isValidForPurchase ||
+                      currentStock === 0 ||
+                      loadingFreebies
                     }
-                    className="flex-1 bg-white/5 border border-white/10 backdrop-blur-xl text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/10 transition-all active:scale-[0.98] disabled:opacity-30 disabled:grayscale"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-5 font-bold text-white transition-all hover:bg-white/10 active:scale-[0.98] disabled:grayscale disabled:opacity-30"
                   >
                     <BiSolidCartAdd className="text-2xl" />
                     {addingToCart ? "Adding..." : "Add"}
@@ -429,22 +690,20 @@ const Index = () => {
         s3ImageKey={selectedDesignItem?.s3ImageKey || ""}
       />
 
-      {/* Loading Modal for adding to cart */}
       {addingToCart && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="bg-[#242050] border border-white/10 rounded-2xl p-8 text-center shadow-2xl">
-            <div className="w-12 h-12 border-4 border-purple-500/10 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white font-medium text-lg">Adding to cart...</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="rounded-2xl border border-white/10 bg-[#242050] p-8 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-purple-500/10 border-t-purple-500" />
+            <p className="text-lg font-medium text-white">Adding to cart...</p>
           </div>
         </div>
       )}
 
-      {/* Loading Modal for buy now processing */}
       {processingBuy && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50">
-          <div className="bg-[#242050] border border-white/10 rounded-2xl p-8 text-center shadow-2xl">
-            <div className="w-12 h-12 border-4 border-purple-500/10 border-t-purple-500 rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white font-medium text-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md">
+          <div className="rounded-2xl border border-white/10 bg-[#242050] p-8 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-4 border-purple-500/10 border-t-purple-500" />
+            <p className="text-lg font-medium text-white">
               Processing purchase...
             </p>
           </div>

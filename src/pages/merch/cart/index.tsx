@@ -4,8 +4,18 @@ import AuthenticatedNav from "../../../components/AuthenticatedNav";
 import Layout from "../../../components/Layout";
 import ProductCard from "./components/ProductCard";
 import OrderSummary from "./components/OrderSummary";
-import { getCart, removeCartItem } from "../../../api/cart";
+import EditFreebieModal from "./components/EditFreebieModal";
+import {
+  getCartItemFreebieSelection,
+  getCart,
+  updateCartItemQuantity,
+  updateCartItemFreebieSelection,
+} from "../../../api/cart";
 import type { CartItemResponse } from "../../../interfaces/cart/CartItemResponse";
+import type {
+  CartItemFreebieSelectionResponse,
+  FreebieSelection,
+} from "../../../interfaces/freebie/FreebieAssignment";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -13,6 +23,15 @@ const Index = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingItem, setEditingItem] = useState<CartItemResponse | null>(null);
+  const [editingFreebieData, setEditingFreebieData] =
+    useState<CartItemFreebieSelectionResponse | null>(null);
+  const [editingSelection, setEditingSelection] = useState<
+    Record<number, FreebieSelection>
+  >({});
+  const [editLoading, setEditLoading] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const location = useLocation();
 
@@ -34,7 +53,7 @@ const Index = () => {
       const getCartResponse = await getCart();
       setItems(getCartResponse.items);
     } catch (err) {
-      // Handle error silently
+      toast.error("We couldn't load your cart right now.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -58,11 +77,6 @@ const Index = () => {
    * Optimistically removes a cart item from the UI, then syncs with the server
    * in the background. If the server request fails, the item is restored to its
    * original position and a toast error is shown.
-   *
-   * Why optimistic: The user sees the item disappear instantly (<10ms), creating
-   * a snappy, native-app feel. The DELETE request fires in the background.
-   *
-   * @param merchVariantItemId - The ID of the cart item to remove
    */
   const handleRemoveItem = useCallback(
     (merchVariantItemId: number) => {
@@ -80,16 +94,166 @@ const Index = () => {
         return next;
       });
 
-      // Fire-and-forget: sync with server in the background
-      removeCartItem(merchVariantItemId).catch(() => {
+      // Fire-and-forget: sync with server in the background using PUT quantity=0
+      updateCartItemQuantity(merchVariantItemId, 0).catch(() => {
         // Revert on failure: restore the item back to its position
         setItems(previousItems);
         setSelectedIds(previousSelectedIds);
-        toast.error("Failed to remove item. Please try again.");
+        toast.error("We couldn't remove this item from your cart.");
       });
     },
     [items, selectedIds],
   );
+
+  const handleQuantityChange = useCallback(
+    (merchVariantItemId: number, currentQty: number, delta: number) => {
+      const currentItem = items.find(
+        (item) => item.merchVariantItemId === merchVariantItemId,
+      );
+      if (
+        currentItem?.merchType === "TICKET" ||
+        currentItem?.merchType === "MEMBERSHIP"
+      ) {
+        return;
+      }
+
+      const nextQuantity = currentQty + delta;
+      
+      if (nextQuantity <= 0) {
+        handleRemoveItem(merchVariantItemId);
+        return;
+      }
+
+      // Optimistic upate
+      const previousItems = items;
+      setItems((prev) => 
+        prev.map((item) => 
+          item.merchVariantItemId === merchVariantItemId 
+            ? { ...item, quantity: nextQuantity } 
+            : item
+        )
+      );
+
+      // Fire-and-forget
+      updateCartItemQuantity(merchVariantItemId, nextQuantity).catch(() => {
+        setItems(previousItems);
+        toast.error("We couldn't update the quantity.");
+      });
+    },
+    [items, handleRemoveItem],
+  );
+
+  const handleOpenFreebieEditor = useCallback(async (item: CartItemResponse) => {
+    setEditingItem(item);
+    setEditLoading(true);
+    setEditError(null);
+
+    try {
+      const freebieData = await getCartItemFreebieSelection(
+        item.merchVariantItemId,
+      );
+      setEditingFreebieData(freebieData);
+      setEditingSelection(
+        freebieData.freebies.reduce<Record<number, FreebieSelection>>(
+          (acc, freebie) => {
+            acc[freebie.ticketFreebieConfigId] =
+              freebie.category === "CLOTHING"
+                ? {
+                    ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+                    selectedSize: freebie.selectedSize || "",
+                    selectedColor: freebie.selectedColor || "",
+                  }
+                : {
+                    ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+                    selectedDesign: freebie.selectedDesign || "",
+                  };
+            return acc;
+          },
+          {},
+        ),
+      );
+    } catch {
+      setEditError("We couldn't load the freebie options for this ticket.");
+      setEditingFreebieData(null);
+    } finally {
+      setEditLoading(false);
+    }
+  }, []);
+
+  const handleCloseFreebieEditor = useCallback(() => {
+    if (editSaving) return;
+    setEditingItem(null);
+    setEditingFreebieData(null);
+    setEditingSelection({});
+    setEditError(null);
+  }, [editSaving]);
+
+  const handleSaveFreebie = useCallback(async () => {
+    if (!editingItem || !editingFreebieData) {
+      return;
+    }
+
+    const payload = editingFreebieData.freebies.map((freebie) => {
+      const selection = editingSelection[freebie.ticketFreebieConfigId];
+      return freebie.category === "CLOTHING"
+        ? {
+            ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+            selectedSize: selection?.selectedSize || "",
+            selectedColor: selection?.selectedColor || "",
+          }
+        : {
+            ticketFreebieConfigId: freebie.ticketFreebieConfigId,
+            selectedDesign: selection?.selectedDesign || "",
+          };
+    });
+
+    const isValidSelection = editingFreebieData.freebies.every((freebie) => {
+      const selection = editingSelection[freebie.ticketFreebieConfigId];
+      return freebie.category === "CLOTHING"
+        ? !!selection?.selectedSize && !!selection?.selectedColor
+        : !!selection?.selectedDesign;
+    });
+
+    if (!isValidSelection) {
+      setEditError("Complete all freebie selections before saving.");
+      return;
+    }
+
+    try {
+      setEditSaving(true);
+      setEditError(null);
+
+      const updatedItem = await updateCartItemFreebieSelection(
+        editingItem.merchVariantItemId,
+        payload,
+      );
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.merchVariantItemId === editingItem.merchVariantItemId
+            ? { ...item, ...updatedItem }
+            : item,
+        ),
+      );
+
+      toast.success("Freebie selection updated.");
+      handleCloseFreebieEditor();
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.message ||
+        err.message ||
+        "We couldn't update the freebie selection.";
+      setEditError(message);
+      toast.error(message);
+    } finally {
+      setEditSaving(false);
+    }
+  }, [
+    editingItem,
+    editingFreebieData,
+    editingSelection,
+    handleCloseFreebieEditor,
+  ]);
 
   const { selectedItems, totalSelectedPrice } = useMemo(() => {
     const selected = items.filter((item) =>
@@ -136,13 +300,22 @@ const Index = () => {
                     isSelected={selectedIds.has(item.merchVariantItemId)}
                     onToggle={() => toggleSelect(item.merchVariantItemId)}
                     onRemove={handleRemoveItem}
+                    onQuantityChange={(delta) => handleQuantityChange(item.merchVariantItemId, item.quantity, delta)}
+                    onEditFreebie={
+                      item.merchType === "TICKET" &&
+                      (item.freebieAssignments?.length || 0) > 0
+                        ? () => handleOpenFreebieEditor(item)
+                        : item.hasFreebie
+                        ? () => handleOpenFreebieEditor(item)
+                        : undefined
+                    }
                   />
                 </div>
               ))
             ) : (
               <div className="bg-[#242050]/50 border border-white/5 rounded-[2rem] py-24 flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6">
-                  <span className="text-4xl">🛒</span>
+                  <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5" />
                 </div>
                 <h3 className="text-xl font-bold text-white">
                   Your cart is empty
@@ -177,6 +350,19 @@ const Index = () => {
           </div>
         </div>
       )}
+
+      <EditFreebieModal
+        open={!!editingItem}
+        merchName={editingItem?.merchName || ""}
+        freebieData={editingFreebieData}
+        selection={editingSelection}
+        loading={editLoading}
+        saving={editSaving}
+        error={editError}
+        onClose={handleCloseFreebieEditor}
+        onSelectionChange={setEditingSelection}
+        onSave={handleSaveFreebie}
+      />
     </Layout>
   );
 };

@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AuthenticatedNav from "../../../components/AuthenticatedNav";
 import { PurchaseCard } from "./components/PurchaseCard";
 import { PurchaseFilter } from "./components/PurchaseFilter";
 import Pagination from "./components/Pagination";
-import { getMyOrders, getOrderItemByStatus } from "../../../api/order";
+import { getMyOrders, getOrderItemByStatus, cancelOrder } from "../../../api/order";
 import type {
   OrderResponse,
   PaginatedOrdersResponse,
@@ -13,13 +13,37 @@ import { OrderStatus } from "../../../enums/OrderStatus";
 import type { PaginationParams } from "../../../interfaces/pagination_params";
 import { FiSearch } from "react-icons/fi";
 import Layout from "../../../components/Layout";
+import { toast } from "sonner";
+import CancelOrderModal from "./components/CancelOrderModal";
 
-interface GroupedPurchaseItem {
-  [orderId: number]: OrderResponse;
-}
+const groupOrderItemsByOrder = (
+  orderItems: OrderItemResponse[],
+): OrderResponse[] => {
+  const groupedOrders: Record<number, OrderResponse> = {};
+
+  orderItems.forEach((item) => {
+    if (!groupedOrders[item.orderId]) {
+      groupedOrders[item.orderId] = {
+        orderId: item.orderId,
+        studentName: item.studentName,
+        totalPrice: 0,
+        orderDate: item.createdAt,
+        orderStatus: item.orderStatus,
+        orderItems: [],
+      };
+    }
+
+    groupedOrders[item.orderId].orderItems.push(item);
+    groupedOrders[item.orderId].totalPrice += item.totalPrice;
+  });
+
+  return Object.values(groupedOrders).sort(
+    (a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(),
+  );
+};
 
 const Index = () => {
-  const [items, setItems] = useState<OrderItemResponse[]>([]);
+  const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
@@ -29,6 +53,69 @@ const Index = () => {
     useState<PaginatedOrdersResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [orderToCancel, setOrderToCancel] = useState<number | null>(null);
+
+  const closeCancelModal = () => {
+    setIsCancelModalOpen(false);
+    setOrderToCancel(null);
+  };
+
+  const openCancelModal = (orderId: number) => {
+    setOrderToCancel(orderId);
+    setIsCancelModalOpen(true);
+  };
+
+  const handleCancelOrder = async (orderId: number) => {
+    try {
+      setCancellingOrderId(orderId);
+      await cancelOrder(orderId);
+      toast.success("Order cancelled successfully");
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === orderId
+            ? {
+                ...order,
+                orderStatus: OrderStatus.CANCELLED,
+                orderItems: order.orderItems.map((item) => ({
+                  ...item,
+                  orderStatus: OrderStatus.CANCELLED,
+                })),
+              }
+            : order,
+        ),
+      );
+
+      closeCancelModal();
+    } catch (err: unknown) {
+      const error = err as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+
+      if (error.response?.status === 400) {
+        // check if order is already in a non-cancellable state
+        const message = error.response.data?.message || "";
+        if (message.includes("TO_BE_CLAIMED") || message.includes("ready")) {
+          toast.error("Cannot cancel - order is ready for pickup");
+        } else if (message.includes("CLAIMED")) {
+          toast.error("Cannot cancel - order already claimed");
+        } else {
+          toast.error(message || "Order can no longer be cancelled");
+        }
+        window.location.reload();
+      } else if (error.response?.status === 404) {
+        toast.error("Order not found");
+        window.location.reload();
+      } else {
+        toast.error("Failed to cancel order. Please try again.");
+      }
+    } finally {
+      setCancellingOrderId(null);
+    }
+  };
+
   useEffect(() => {
     setCurrentPage(0);
   }, [selectedStatus]);
@@ -37,72 +124,63 @@ const Index = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
+
         if (selectedStatus === "All") {
           const response = await getMyOrders({
             page: currentPage,
             size: pageSize,
           } as PaginationParams);
-          setItems(response.content.flatMap((order) => order.orderItems));
+
+          setOrders(Array.isArray(response.content) ? response.content : []);
           setPaginationInfo(response);
         } else {
           const fetchedItems = await getOrderItemByStatus(
             selectedStatus as OrderStatus,
           );
-          setItems(fetchedItems.content || []);
+
+          setOrders(groupOrderItemsByOrder(fetchedItems.content || []));
           setPaginationInfo(null);
         }
+
         setError(null);
-      } catch (err) {
+      } catch {
         setError("Failed to load purchases. Please try again later.");
-        setItems([]);
+        setOrders([]);
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, [currentPage, pageSize, selectedStatus]);
 
   const filteredOrders = useMemo(() => {
-    if (!Array.isArray(items)) return [];
-    let filteredItems = items;
+    if (!Array.isArray(orders)) return [];
 
-    if (searchQuery) {
-      filteredItems = filteredItems.filter(
-        (item) =>
-          item.merchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          item.studentId.toLowerCase().includes(searchQuery.toLowerCase()),
-      );
+    if (!searchQuery.trim()) {
+      return orders;
     }
 
-    const grouped: GroupedPurchaseItem = {};
-    filteredItems.forEach((item) => {
-      if (!grouped[item.orderId]) {
-        grouped[item.orderId] = {
-          orderId: item.orderId,
-          studentName: item.studentName,
-          totalPrice: 0,
-          orderDate: item.createdAt,
-          orderItems: [],
-        };
-      }
-      grouped[item.orderId].orderItems.push(item);
-      grouped[item.orderId].totalPrice += item.totalPrice;
-    });
+    const normalizedQuery = searchQuery.toLowerCase();
 
-    return Object.values(grouped).sort(
-      (a, b) =>
-        new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(),
+    return orders.filter(
+      (order) =>
+        order.studentName.toLowerCase().includes(normalizedQuery) ||
+        order.orderId.toString().includes(normalizedQuery) ||
+        order.orderItems.some(
+          (item) =>
+            item.merchName.toLowerCase().includes(normalizedQuery) ||
+            item.studentName.toLowerCase().includes(normalizedQuery) ||
+            item.studentId.toLowerCase().includes(normalizedQuery),
+        ),
     );
-  }, [items, searchQuery]);
+  }, [orders, searchQuery]);
 
   return (
     <Layout>
       <AuthenticatedNav />
 
-      {/* Responsive padding: px-4 for mobile, px-6 for desktop */}
       <div className="max-w-[90rem] mx-auto px-4 sm:px-6 py-6 sm:py-10 lg:py-16">
-        {/* Page Header - Centered on mobile */}
         <header className="mb-8 sm:mb-12 text-center sm:text-left">
           <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
             My Purchases
@@ -112,10 +190,7 @@ const Index = () => {
           </p>
         </header>
 
-        {/* Filter & Search Bar - Responsive stacking */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6 mb-8 sm:mb-10 bg-white/5 border border-white/10 p-4 sm:p-5 rounded-2xl sm:rounded-[2rem] backdrop-blur-md relative z-10">
-          {/* PurchaseFilter should ideally be responsive internally, 
-              but here we ensure it doesn't break the parent layout */}
           <PurchaseFilter
             selectedStatus={selectedStatus}
             onStatusChange={setSelectedStatus}
@@ -128,12 +203,11 @@ const Index = () => {
               placeholder="Search orders..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3  border border-white/5 rounded-xl sm:rounded-2xl text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50 transition-all text-sm font-medium"
+              className="w-full pl-11 pr-4 py-3 border border-white/5 rounded-xl sm:rounded-2xl text-white placeholder-white/20 focus:outline-none focus:border-purple-500/50 transition-all text-sm font-medium"
             />
           </div>
         </div>
 
-        {/* States Section */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24 sm:py-32 space-y-4">
             <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
@@ -155,20 +229,35 @@ const Index = () => {
           <div className="space-y-8 sm:space-y-12">
             {filteredOrders.map((purchase) => (
               <section key={purchase.orderId} className="group">
-                {/* Responsive Header: Stacks price and ID on mobile if needed */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 mb-4 gap-2">
                   <div className="flex items-center gap-3">
                     <div className="h-[1px] flex-1 min-w-[20px] bg-white/5 sm:hidden" />
                   </div>
-
+                  <p className="text-white/60 text-xs sm:text-sm font-semibold">
+                    Order: <span className="text-white font-bold">#{purchase.orderId}</span>
+                  </p>
                   <div className="hidden sm:block h-[1px] flex-1 mx-6 bg-white/5" />
 
-                  <p className="text-white/60 text-xs sm:text-sm font-semibold">
-                    Total:{" "}
-                    <span className="text-white font-bold">
-                      ₱{purchase.totalPrice.toFixed(2)}
-                    </span>
-                  </p>
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                    <p className="text-white/60 text-xs sm:text-sm font-semibold">
+                      Total:{" "}
+                      <span className="text-white font-bold">
+                        PHP {purchase.totalPrice.toFixed(2)}
+                      </span>
+                    </p>
+                    {purchase.orderStatus === OrderStatus.PENDING && (
+                      <button
+                        type="button"
+                        onClick={() => openCancelModal(purchase.orderId)}
+                        disabled={cancellingOrderId === purchase.orderId}
+                        className="inline-flex min-h-9 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-400 transition-colors duration-150 hover:bg-red-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#12072f] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {cancellingOrderId === purchase.orderId
+                          ? "Cancelling..."
+                          : "Cancel order"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <PurchaseCard purchase={purchase} />
@@ -177,7 +266,6 @@ const Index = () => {
           </div>
         )}
 
-        {/* Pagination Controls */}
         {!loading &&
           !error &&
           paginationInfo &&
@@ -191,6 +279,15 @@ const Index = () => {
             </div>
           )}
       </div>
+
+      {isCancelModalOpen && orderToCancel && (
+        <CancelOrderModal
+          orderId={orderToCancel}
+          isLoading={cancellingOrderId === orderToCancel}
+          onClose={closeCancelModal}
+          onConfirm={handleCancelOrder}
+        />
+      )}
     </Layout>
   );
 };
